@@ -1,0 +1,3 @@
+  - [ zypper, -n, install, ${packages} ]
+  - [ zypper, -n, update ]
+  - [ reboot ]

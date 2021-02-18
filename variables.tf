@@ -73,11 +73,6 @@ variable "cidr_mapping" {
   }
 }
 
-#variable "network_cidr" {
-#  type        = string
-#  default     = "10.111.1.0/24"
-#  description = "Network used by the cluster"
-#}
 
 variable "network_mode" {
   type        = string

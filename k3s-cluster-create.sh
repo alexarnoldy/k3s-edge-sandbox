@@ -1,84 +1,117 @@
-#!/bin/bash
+#!/bin/bash 
 
-## Script to run Terraform to create an openSUSE JeOS cluster on the local system then run K3sup to create a K3s cluster on it.
+## Script to run Terraform to create an openSUSE JeOS cluster on the local system 
+## then run K3sup to create a K3s cluster on it, and finally import the cluster into a Rancher server instance.
 ## 02/17/2021 - alex.arnoldy@suse.com
+################################################################################################
+##		This script relies on /etc/hosts or DNS for IPAM as well as hostname resolution 
+##		to discover simulated edge locations. 
+## IMPORTANT: 	Ensure either /etc/hosts or DNS is configured to resolve hostnames in the format
+## 		of "edge-location"-server-[0-2] and "edge-location"-agent-[0-N]
+##		i.e. bangkok-server-0 and bangkok-agent-5
+################################################################################################
 
-## Rancher tokens need to be kept in a file in the user's home directory
+## Rancher tokens need to be kept in a file in this user's home directory
 ## Format needs to be:
 ## export RANCHER_ACCESS_KEY=token-xxxxx
 ## export RANCHER_SECRET_KEY=xxxxxxxxxxxxxxxx
-
 source ${HOME}/.rancher_tokens
 
-[ -z "$1" ] && echo "Usage: k3s-cluster-create.sh <name of predefined edge location>" && exit
-
+RED='\033[0;31m'
+LCYAN='\033[1;36m'
+NC='\033[0m' # No Color
 EDGE_LOCATION=$1
 SSH_USER="opensuse"
 
-case ${EDGE_LOCATION} in
-	bangkok) 
-		SERVER_IP="10.111.1.11"
-		AGENT_0_IP="10.111.1.14"
-		AGENT_1_IP="10.111.1.15"
-	;;
-	freetown) 
-		SERVER_IP="10.111.2.11"
-		AGENT_0_IP="10.111.2.14"
-		AGENT_1_IP="10.111.2.15"
-	;;
-	munich) 
-		SERVER_IP="10.111.3.11"
-		AGENT_0_IP="10.111.3.14"
-		AGENT_1_IP="10.111.3.15"
-	;;
-	sydney) 
-		SERVER_IP="10.111.4.11"
-		AGENT_0_IP="10.111.4.14"
-		AGENT_1_IP="10.111.4.15"
-	;;
-	*)
-		echo "$1 Edge Location has not been defined. Exiting."
-		exit
-	;;
-esac
+
+## Test for argument provided with the command
+[ -z "$1" ] && echo "Usage: k3s-cluster-create.sh <name of predefined edge location>" && exit
+
+
+## Discover up to 3 server nodes to be used in this edge location.
+## Note that the array is populated with the IP addresses being the even indices
+## and the associated hostnames being the subsequent odd indices
+## i.e. ${ALL_SERVERS[0]} is the IP of the first server and ${ALL_SERVERS[1]} is
+## the hostname of the first server
+ALL_SERVERS=($(getent hosts ${EDGE_LOCATION}-server-{0..2}))
+
+
+
+## Test to see if the provided argument matches a defined edge location
+FIRST_SERVER_HOSTNAME=${ALL_SERVERS[1]}
+## FIRST_SERVER_IP will be used later in the script
+FIRST_SERVER_IP=${ALL_SERVERS[0]}
+[ -z "${FIRST_SERVER_HOSTNAME}" ]  && echo -e "Edge location \"${LCYAN}${EDGE_LOCATION}${NC}\" is not defined." && exit
+
+
+## Discover up to 25 agent nodes to be used in this edge location. Adjust above 25 as needed.
+ALL_AGENTS=($(getent hosts ${EDGE_LOCATION}-agent-{0..25}))
+
+
+## Establish the last index in the array
+FINAL_AGENT_INDEX=$(echo $((${#ALL_AGENTS[@]}-1)))
+
+##Example of how to iterate over the IPs in the array
+#for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do echo ${ALL_AGENTS[INDEX]}; done
+##Example of how to iterate over the hostnames in the array
+#for INDEX in $(seq 1 2 ${FINAL_AGENT_INDEX}); do echo ${ALL_AGENTS[INDEX]}; done
 
 
 ## Create the JeOS cluster nodes. Saves the state files to specific locations to keep things tidy
 terraform apply -auto-approve --state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate -var=edge_location=${EDGE_LOCATION}
 
+
 mkdir -p ~/.kube/
 
 
 ## Ensure the server node is updated and ready before installing K3s 
-ssh-keygen -q -R ${SERVER_IP} -f ${HOME}/.ssh/known_hosts
-#echo "Waiting until server is updated..."
-until ssh -o StrictHostKeyChecking=no opensuse@${SERVER_IP} which which; do echo "Waiting while ${SERVER_IP} updates its software..." && sleep 30; done
-echo "Waiting for ${SERVER_IP} to reboot..."
+ssh-keygen -q -R ${FIRST_SERVER_IP} -f ${HOME}/.ssh/known_hosts
+
+## This tests for the which command to be installed, which is required to install K3s
+## and its installation is the last thing cloud-init does before rebooting
+until ssh -o StrictHostKeyChecking=no opensuse@${FIRST_SERVER_IP} which which; do echo "Waiting while ${FIRST_SERVER_HOSTNAME} updates its software..." && sleep 30; done
+
+echo "Waiting for ${FIRST_SERVER_IP} to reboot..."
 sleep 60
-until nc -zv ${SERVER_IP} 22; do echo "Waiting until ${SERVER_IP} finishes rebooting..." && sleep 5; done
+
+until nc -zv ${FIRST_SERVER_IP} 22; do echo "Waiting until ${FIRST_SERVER_HOSTNAME} finishes rebooting..." && sleep 5; done
 echo "Waiting for someone who truly gets me..."
 sleep 10
 
 
 
-## Remove a previous config file, if it exists
+## Remove a previous config file if it exists
 rm -f ${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 
 
-## Use k3sup to create the non-HA cluster removed ${MERGE} from install command
-k3sup install --ip ${SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable  --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3ai-${EDGE_LOCATION}
+## Use k3sup to install the first server node
+k3sup install --ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable  --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3ai-${EDGE_LOCATION}
 
 
 
-## Wait until the K3s server node is ready before joining agents
+## Wait until the K3s server node is ready before joining the rest of the nodes
 export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 kubectl config set-context k3ai-${EDGE_LOCATION}
 sleep 5
 kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns
 
-k3sup join --ip ${AGENT_0_IP} --server-ip ${SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
 
-k3sup join --ip ${AGENT_1_IP} --server-ip ${SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
+
+###### Broken until a test that inserts --cluster is created
+## Join the remaining two server nodes to the cluster
+#for INDEX in 2 4; do 
+#	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
+#	sleep 5
+#done
+###### Broken until a test that inserts --cluster is created
+
+
+
+## Join all agent nodes to the cluster
+for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do 
+	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
+	sleep 5
+done
 
 
 
@@ -88,4 +121,4 @@ kubectl config use-context k3ai-${EDGE_LOCATION}
 bash -c "$(grep -w command ~/k3ai-sandbox-demo/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
 
 
-echo ""; echo "Run the commands: \`export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}; kubectl config set-context k3ai-${EDGE_LOCATION}\` to work with the k3ai-${EDGE_LOCATION} cluster"
+echo ""; echo -e "Run the commands: \`${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; export KUBECONFIG=${HOME}/.kube/kubeconfig-\${EDGE_LOCATION}; kubectl config set-context k3ai-\${EDGE_LOCATION}${NC}\` to work with the k3ai-${EDGE_LOCATION} cluster"

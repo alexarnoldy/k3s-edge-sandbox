@@ -10,6 +10,10 @@
 ## 		of "edge-location"-server-[0-2] and "edge-location"-agent-[0-N]
 ##		i.e. bangkok-server-0 and bangkok-agent-5
 ################################################################################################
+##                  This script currently does not support HA server nodes.
+## SUPER IMPORTANT: Defining more than one server node won't add any value and could potentially
+##                  break the cluster.
+################################################################################################
 
 ## Rancher tokens need to be kept in a file in this user's home directory
 ## Format needs to be:

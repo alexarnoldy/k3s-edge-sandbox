@@ -11,3 +11,8 @@ output "ip_agents" {
     libvirt_domain.agent.*.network_interface.0.addresses.0,
   )
 }
+
+output "cluster_registration_token" {
+  value = data.rancher2_cluster.k3s-cluster.cluster_registration_token[0]
+  sensitive   = true
+}

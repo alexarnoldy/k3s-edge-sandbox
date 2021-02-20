@@ -38,10 +38,10 @@ variable "packages" {
   type = list(string)
 
   default = [
-    "which",
     "wget",
     "kernel-default",
-    "-kernel-default-base"
+    "-kernel-default-base",
+    "which"
   ]
 
   description = "List of packages to install on all nodes"
@@ -64,15 +64,9 @@ variable "dns_domain" {
 }
 
 variable "cidr_mapping" {
-  description = "CIDR mapping of subnets per K3s cluster deployed on the same KVM host."
-  default = {
-    "bangkok" = "10.111.1.0/24"
-    "freetown" = "10.111.2.0/24"
-    "munich" = "10.111.3.0/24"
-    "sydney" = "10.111.4.0/24"
-  }
+  type = map
+  description = "Association between edge location and the assigned CIDR block"
 }
-
 
 variable "network_mode" {
   type        = string

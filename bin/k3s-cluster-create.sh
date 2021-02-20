@@ -1,8 +1,11 @@
 #!/bin/bash 
 
 ## Script to run Terraform to create an openSUSE JeOS cluster on the local system 
-## then run K3sup to create a K3s cluster on it, and finally import the cluster into a Rancher server instance.
+## then run K3sup to create a K3s cluster on it, and finally import the cluster 
+## into a Rancher server instance.
+
 ## 02/17/2021 - alex.arnoldy@suse.com
+
 ################################################################################################
 ##		This script relies on /etc/hosts or DNS for IPAM as well as hostname resolution 
 ##		to discover simulated edge locations. 
@@ -10,9 +13,9 @@
 ## 		of "edge-location"-server-[0-2] and "edge-location"-agent-[0-N]
 ##		i.e. bangkok-server-0 and bangkok-agent-5
 ################################################################################################
-##                  This script currently does not support HA server nodes.
+##		    This script currently does not support HA server nodes.
 ## SUPER IMPORTANT: Defining more than one server node won't add any value and could potentially
-##                  break the cluster.
+## 		    break the cluster.
 ################################################################################################
 
 ## Rancher tokens need to be kept in a file in this user's home directory
@@ -62,7 +65,16 @@ FINAL_AGENT_INDEX=$(echo $((${#ALL_AGENTS[@]}-1)))
 
 
 ## Create the JeOS cluster nodes. Saves the state files to specific locations to keep things tidy
-terraform apply -auto-approve --state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate -var=edge_location=${EDGE_LOCATION}
+## Determine the CIDR denoted SUBNET based on the IP address of the first server
+SUBNET=$(getent hosts ${EDGE_LOCATION}-server-0 | awk '{print$1}' | awk -F. '{print$1"."$2"."$3".0/24"}')
+
+## Create a custom tfvars file for this deployment
+cat <<EOF> state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
+edge_location = "${EDGE_LOCATION}"
+cidr_mapping = {${EDGE_LOCATION} = "${SUBNET}"}
+EOF
+
+terraform apply -auto-approve --state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
 
 
 mkdir -p ~/.kube/
@@ -71,13 +83,10 @@ mkdir -p ~/.kube/
 ## Ensure the server node is updated and ready before installing K3s 
 ssh-keygen -q -R ${FIRST_SERVER_IP} -f ${HOME}/.ssh/known_hosts
 
-## This tests for the which command to be installed, which is required to install K3s
-## and its installation is the last thing cloud-init does before rebooting
-until ssh -o StrictHostKeyChecking=no opensuse@${FIRST_SERVER_IP} which which; do echo "Waiting while ${FIRST_SERVER_HOSTNAME} updates its software..." && sleep 30; done
+## This tests for a shutdown entry to be added to the last log, indicating the node has rebooted
+until ssh -o StrictHostKeyChecking=no opensuse@${FIRST_SERVER_IP} last -x | grep shutdown; do echo "Waiting while ${FIRST_SERVER_HOSTNAME} boots up and updates its software..." && sleep 30; done
 
-echo "Waiting for ${FIRST_SERVER_IP} to reboot..."
-sleep 60
-
+## Test for sshd to come online after the reboot, then wait ten seconds more for the node to finish booting
 until nc -zv ${FIRST_SERVER_IP} 22; do echo "Waiting until ${FIRST_SERVER_HOSTNAME} finishes rebooting..." && sleep 5; done
 echo "Waiting for someone who truly gets me..."
 sleep 10
@@ -124,5 +133,11 @@ export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 kubectl config use-context k3ai-${EDGE_LOCATION}
 bash -c "$(grep -w command ~/k3ai-sandbox-demo/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
 
+echo "######################## TO DESTROY THIS CLUSTER, USE THE COMMAND SEQUENCE: "
+echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"
+echo "###########################################################################"
+echo ""
 
-echo ""; echo -e "Run the commands: \`${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; export KUBECONFIG=${HOME}/.kube/kubeconfig-\${EDGE_LOCATION}; kubectl config set-context k3ai-\${EDGE_LOCATION}${NC}\` to work with the k3ai-${EDGE_LOCATION} cluster"
+
+echo ""; echo "It may take a few more minutes for the ${EDGE_LOCATION} cluster to finish getting ready for use."
+echo ""; echo -e "Run the command sequence: \`${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; export KUBECONFIG=${HOME}/.kube/kubeconfig-\${EDGE_LOCATION}; kubectl config set-context k3ai-\${EDGE_LOCATION}${NC}\` to work with the k3ai-${EDGE_LOCATION} cluster"

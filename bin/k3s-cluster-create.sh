@@ -7,9 +7,10 @@
 ## 02/17/2021 - alex.arnoldy@suse.com
 
 ################################################################################################
-##		This script relies on /etc/hosts or DNS for IPAM as well as hostname resolution 
-##		to discover simulated edge locations. 
-## IMPORTANT: 	Ensure either /etc/hosts or DNS is configured to resolve hostnames in the format
+##		This script relies on /etc/hosts or DNS (DNS hasn't been tested yet and doesn't
+## 		support domain names yet) for IPAM as well as hostname resolution 
+## IMPORTANT: 	to discover simulated edge locations. 
+##		Ensure either /etc/hosts or DNS is configured to resolve hostnames in the format
 ## 		of "edge-location"-server-[0-2] and "edge-location"-agent-[0-N]
 ##		i.e. bangkok-server-0 and bangkok-agent-5
 ################################################################################################
@@ -31,8 +32,12 @@ EDGE_LOCATION=$1
 SSH_USER="opensuse"
 
 
-## Test for argument provided with the command
-[ -z "$1" ] && echo "Usage: k3s-cluster-create.sh <name of predefined edge location>" && exit
+## Test for at least one argument provided with the command
+[ -z "$1" ] && echo "Usage: k3s-cluster-create.sh  <name of predefined edge location>  <Optional domain name>" && exit
+
+
+## Set DOMAIN_NAME to second argument, if provided
+[ -z "$2" ] && DOMAIN_NAME=[A-Za-b0-9] || DOMAIN_NAME=$2
 
 
 ## Discover up to 3 server nodes to be used in this edge location.
@@ -40,7 +45,8 @@ SSH_USER="opensuse"
 ## and the associated hostnames being the subsequent odd indices
 ## i.e. ${ALL_SERVERS[0]} is the IP of the first server and ${ALL_SERVERS[1]} is
 ## the hostname of the first server
-ALL_SERVERS=($(getent hosts ${EDGE_LOCATION}-server-{0..2}))
+#ALL_SERVERS=($(getent hosts ${EDGE_LOCATION}-server-{0..2}))
+ALL_SERVERS=($(getent hosts | grep -i ${EDGE_LOCATION} | grep -i ${DOMAIN_NAME} | grep -i server | sort -k 1,1))
 
 
 
@@ -52,7 +58,8 @@ FIRST_SERVER_IP=${ALL_SERVERS[0]}
 
 
 ## Discover up to 25 agent nodes to be used in this edge location. Adjust above 25 as needed.
-ALL_AGENTS=($(getent hosts ${EDGE_LOCATION}-agent-{0..25}))
+#ALL_AGENTS=($(getent hosts ${EDGE_LOCATION}-agent-{0..25}))
+ALL_AGENTS=($(getent hosts | grep -i ${EDGE_LOCATION} | grep -i ${DOMAIN_NAME} | grep -i agent | sort -k 1,1))
 
 
 ## Establish the last index in the array
@@ -66,7 +73,8 @@ FINAL_AGENT_INDEX=$(echo $((${#ALL_AGENTS[@]}-1)))
 
 ## Create the JeOS cluster nodes. Saves the state files to specific locations to keep things tidy
 ## Determine the CIDR denoted SUBNET based on the IP address of the first server
-SUBNET=$(getent hosts ${EDGE_LOCATION}-server-0 | awk '{print$1}' | awk -F. '{print$1"."$2"."$3".0/24"}')
+#SUBNET=$(getent hosts ${EDGE_LOCATION}-server-0 | awk '{print$1}' | awk -F. '{print$1"."$2"."$3".0/24"}')
+SUBNET=$(echo ${ALL_SERVERS[0]} | awk -F. '{print$1"."$2"."$3".0/24"}')
 
 ## Create a custom tfvars file for this deployment
 cat <<EOF> state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
@@ -84,7 +92,7 @@ mkdir -p ~/.kube/
 ssh-keygen -q -R ${FIRST_SERVER_IP} -f ${HOME}/.ssh/known_hosts
 
 ## This tests for a shutdown entry to be added to the last log, indicating the node has rebooted
-until ssh -o StrictHostKeyChecking=no opensuse@${FIRST_SERVER_IP} last -x | grep shutdown; do echo "Waiting while ${FIRST_SERVER_HOSTNAME} boots up and updates its software..." && sleep 30; done
+until ssh -o StrictHostKeyChecking=no opensuse@${FIRST_SERVER_IP} last -x | grep shutdown; do echo "Waiting for ${FIRST_SERVER_HOSTNAME} to boot up and update its software..." && sleep 30; done
 
 ## Test for sshd to come online after the reboot, then wait ten seconds more for the node to finish booting
 until nc -zv ${FIRST_SERVER_IP} 22; do echo "Waiting until ${FIRST_SERVER_HOSTNAME} finishes rebooting..." && sleep 5; done

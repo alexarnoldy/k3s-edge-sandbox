@@ -1,1 +1,32 @@
-# k3ai-sandbox-demo
+Instructions for implementing: Coming soon...
+
+NOTE: All servers must have "server" in their name and agents must have "agent" in their name
+
+Example of /etc/hosts entries:
+
+## K3ai Sandbox Demo with just hostnames
+10.111.1.11	bangkok-server-0
+10.111.1.14	bangkok-agent-0
+10.111.1.15	bangkok-agent-1
+
+## K3ai Sandbox Demo with a single node
+10.111.2.11	freetown-server-0
+
+## K3ai Sandbox Demo with a multiple server nodes (HA not yet configured)
+10.111.3.11	munich-server-0
+10.111.3.12	munich-server-1
+10.111.3.13	munich-server-2
+10.111.3.14	agenet-0-munich
+10.111.3.15	agenet-1-munich
+10.111.3.16	agenet-2-munich
+
+## K3ai Sandbox Demo with a two nodes
+10.111.4.11	sydney-server
+10.111.4.14	sydney-agent
+ 
+## K3ai Sandbox Demo with FQDNs
+10.111.5.12	cancun-server-1.edge.sandbox.local
+10.111.5.11	cancun-server-0.edge.sandbox.local
+10.111.5.15	cancun-agent-1.edge.sandbox.local
+10.111.5.14	cancun-agent-0.edge.sandbox.local
+10.111.5.16	cancun-agent-2.edge.sandbox.local

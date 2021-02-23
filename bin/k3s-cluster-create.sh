@@ -19,7 +19,7 @@
 ## 		    break the cluster.
 ################################################################################################
 
-## Rancher tokens need to be kept in a file in this user's home directory
+## Rancher tokens need to be kept in a ~/.rancher_tokens file in this user's home directory
 ## Format needs to be:
 ## export RANCHER_ACCESS_KEY=token-xxxxx
 ## export RANCHER_SECRET_KEY=xxxxxxxxxxxxxxxx
@@ -62,8 +62,14 @@ FIRST_SERVER_IP=${ALL_SERVERS[0]}
 ALL_AGENTS=($(getent hosts | grep -i ${EDGE_LOCATION} | grep -i ${DOMAIN_NAME} | grep -i agent | sort -k 1,1))
 
 
-## Establish the last index in the array
+## Establish the last index in the arrays
 FINAL_AGENT_INDEX=$(echo $((${#ALL_AGENTS[@]}-1)))
+FINAL_SERVER_INDEX=$(echo $((${#ALL_SERVERS[@]}-1)))
+
+## Establish the number of servers and agents in the arrays:
+NUM_SERVERS=$(echo $((${#ALL_SERVERS[@]} / 2 )))
+NUM_AGENTS=$(echo $((${#ALL_AGENTS[@]} / 2 )))
+
 
 ##Example of how to iterate over the IPs in the array
 #for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do echo ${ALL_AGENTS[INDEX]}; done
@@ -78,6 +84,8 @@ SUBNET=$(echo ${ALL_SERVERS[0]} | awk -F. '{print$1"."$2"."$3".0/24"}')
 
 ## Create a custom tfvars file for this deployment
 cat <<EOF> state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
+k3s_servers = ${NUM_SERVERS}
+k3s_agents = ${NUM_AGENTS}
 edge_location = "${EDGE_LOCATION}"
 cidr_mapping = {${EDGE_LOCATION} = "${SUBNET}"}
 EOF
@@ -141,8 +149,8 @@ export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 kubectl config use-context k3ai-${EDGE_LOCATION}
 bash -c "$(grep -w command ~/k3ai-sandbox-demo/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
 
-echo "######################## TO DESTROY THIS CLUSTER, USE THE COMMAND SEQUENCE: "
-echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"
+echo -e "######################## ${RED}TO DESTROY THIS CLUSTER, USE THE COMMAND SEQUENCE:${NC} "
+echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; source ~/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"
 echo "###########################################################################"
 echo ""
 

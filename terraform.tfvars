@@ -15,20 +15,20 @@ libvirt_keyfile = ""
 image_uri = "images/openSUSE-Leap-15.2-JeOS.x86_64-15.2-OpenStack-Cloud-Build31.348.qcow2"
 
 # Identifier to make all your resources unique and avoid clashes with other users of this terraform project
+## Set edge_location with the bin/k3s_create_cluster.sh script
 #edge_location = "k3ai-sandbox-demo"
 
-# DNS domain of the cluster. This will also be used as the name of the CaaS Platform cluster for automated deployment
-#dns_domain = ""
-
 # Number of server nodes
-k3s_servers       = 1
+## Set k3s_servers with the bin/k3s_create_cluster.sh script
+#k3s_servers       = 1
 server_memory = 2048
 server_vcpu   = 2
 
 # Number of agent nodes
-k3s_agents       = 2
-agent_memory = 4096
-agent_vcpu   = 4
+## Set k3s_agents with the bin/k3s_create_cluster.sh script
+#k3s_agents       = 2
+agent_memory = 2048
+agent_vcpu   = 2
 
 # Username for the cluster nodes
 # EXAMPLE:

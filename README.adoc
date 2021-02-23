@@ -1,6 +1,43 @@
 Instructions for implementing: Coming soon...
 
-NOTE: All servers must have "server" in their name and agents must have "agent" in their name
+Built and tested on openSUSE Leap 15.2
+* Each deployed K3s cluster will have a dedicated NAT bridge, and thus are not easily reachable outside of the local KVM host
+* Currently, this edge sandbox demo environment must be installed and run on a KVM host
+** Certain solutions, such as SSH tunnels, need to be tested that would allow this environment to be run from a location other than the KVM host
+* If needed, the Rancher MCM server can be run as a Docker container on the KVM host 
+* All of the simulated edge locations are defined through the /etc/hosts file or in DNS
+** See the examples below for specific guidance
+
+.The following required software can obtained from various sources but all are available from software.opensuse.org
+* kubectl
+* terraform
+* terraform-provider-libvirt
+* k3sup
+* openSUSE-Leap-15.2-JeOS.x86_64-15.2-OpenStack-Cloud-Build31.348.qcow2
+
+.Steps to prepare this environment
+* Deploy a Rancher MCM server anywhere that can be reached by the K3s clusters on port 443
+* Create API access tokens for your account on the Rancher MCM server
+* Create a ~/.rancher_tokens file with the format:
+
+----
+export RANCHER_ACCESS_KEY=token-xxxxx
+export RANCHER_SECRET_KEY=xxxxxxxxxxxxxxxx
+----
+
+* Clone this repository and cd into the directory
+* Place the openSUSE-Leap-15.2-JeOS.x86_64-15.2-OpenStack-Cloud-Build31.348.qcow2 image in the images/ directory
+* Update the terraform.tfvars file with: 
+** The server and agent memory and vCPU configurations
+** The SSH public key for the KVM host user (the authorized_keys array at the bottom of the file)
+* Define the simulated edge locations and their nodes in the KVM host's /etc/host file or in DNS
+** See the examples below for specific guidance
+* From inside this directory, run `terraform init`
+* Create a simulated edge location with command `./bin/bin/k3s-cluster-create.sh <edge location> <optional domain name>`
+** I.e. `./bin/bin/k3s-cluster-create.sh cancun edge.sandbox.local`
+
+
+NOTE: All servers must have "server" in their name and agents must have "agent" in their name. All nodes for a specific edge location must have the name of that edge location either in their name or in the domain name.
 
 Example of /etc/hosts entries:
 
@@ -9,22 +46,22 @@ Example of /etc/hosts entries:
 10.111.1.14	bangkok-agent-0
 10.111.1.15	bangkok-agent-1
 
-## K3ai Sandbox Demo with a single node
+## K3ai Sandbox Demo with a single node, acts a both server and agent
 10.111.2.11	freetown-server-0
 
-## K3ai Sandbox Demo with a multiple server nodes (HA not yet configured)
-10.111.3.11	munich-server-0
-10.111.3.12	munich-server-1
-10.111.3.13	munich-server-2
-10.111.3.14	agenet-0-munich
-10.111.3.15	agenet-1-munich
-10.111.3.16	agenet-2-munich
+## K3ai Sandbox Demo with a multiple server nodes (HA is not yet available)
+10.111.3.11	server-0-munich
+10.111.3.12	server-1-munich
+10.111.3.13	server-2-munich
+10.111.3.14	agent-0-munich
+10.111.3.15	agent-1-munich
+10.111.3.16	agent-2-munich
 
 ## K3ai Sandbox Demo with a two nodes
-10.111.4.11	sydney-server
-10.111.4.14	sydney-agent
+10.111.4.11	server.sydney.sandbox.local
+10.111.4.14	agent.sydney.sandbox.local
  
-## K3ai Sandbox Demo with FQDNs
+## K3ai Sandbox Demo with FQDNs, note that order in which the nodes are listed in not important
 10.111.5.12	cancun-server-1.edge.sandbox.local
 10.111.5.11	cancun-server-0.edge.sandbox.local
 10.111.5.15	cancun-agent-1.edge.sandbox.local

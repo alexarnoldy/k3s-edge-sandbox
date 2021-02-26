@@ -36,6 +36,13 @@ SSH_USER="opensuse"
 [ -z "$1" ] && echo "Usage: k3s-cluster-create.sh  <name of predefined edge location>  <Optional domain name>" && exit
 
 
+## Ensure the required utilities are present before continuing
+for UTILITY in nc git terraform k3sup kubectl 
+do
+	which ${UTILITY} &> /dev/null || { echo "The ${UTILITY} utility is not in your path or is not present on this system. Please resolve before attempting another run. Exiting."; exit; }
+done
+
+
 ## Set DOMAIN_NAME to second argument, if provided
 [ -z "$2" ] && DOMAIN_NAME=[A-Za-b0-9] || DOMAIN_NAME=$2
 
@@ -149,11 +156,14 @@ export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 kubectl config use-context k3ai-${EDGE_LOCATION}
 bash -c "$(grep -w command ~/k3ai-sandbox-demo/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
 
-echo -e "######################## ${RED}TO DESTROY THIS CLUSTER, USE THE COMMAND SEQUENCE:${NC} "
-echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; source ~/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"
-echo "###########################################################################"
+echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
+
+echo -e "######################## ${RED}TO DESTROY THIS CLUSTER, USE THE COMMAND:${LCYAN} ./bin/destroy_${EDGE_LOCATION}_edge_location.sh${NC} "
+#echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; source ~/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"
+#echo "###########################################################################"
 echo ""
 
+chmod 755 ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
 echo ""; echo "It may take a few more minutes for the ${EDGE_LOCATION} cluster to finish getting ready for use."
 echo ""; echo -e "Run the command sequence: \`${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; export KUBECONFIG=${HOME}/.kube/kubeconfig-\${EDGE_LOCATION}; kubectl config set-context k3ai-\${EDGE_LOCATION}${NC}\` to work with the k3ai-${EDGE_LOCATION} cluster"

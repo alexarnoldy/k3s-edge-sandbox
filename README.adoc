@@ -10,15 +10,24 @@ Built and tested on openSUSE Leap 15.2
 
 .The following required software can obtained from various sources but all are available from software.opensuse.org
 * kubectl
+** https://software.opensuse.org/package/kubectl
 * terraform
+** https://software.opensuse.org/package/terraform
 * terraform-provider-libvirt
+** https://software.opensuse.org/package/terraform-provider-libvirt
 * k3sup
+** https://software.opensuse.org/package/k3sup
 * openSUSE-Leap-15.2-JeOS.x86_64-15.2-OpenStack-Cloud-Build31.348.qcow2
+** https://get.opensuse.org/leap/
+*** Select JeOS, then OpenStack-Cloud
 
 .Steps to prepare this environment
-* Deploy a Rancher MCM server anywhere that can be reached by the K3s clusters on port 443
-* Create API access tokens for your account on the Rancher MCM server
-* Create a ~/.rancher_tokens file with the format:
+* Deploy a Rancher MCM server anywhere that it can be reached by the K3s clusters on port 443
+** Public cloud providers are common option as they allow easy access from the Internet
+** Various deployment options can be found at: https://rancher.com/docs/rancher/v2.x/en/quick-start-guide/deployment/
+* Create API access tokens for your account on the Rancher MCM server 
+** https://rancher.com/docs/rancher/v2.x/en/user-settings/api-keys/
+* On the KVM host (or the host from which this software will be run), create a ~/.rancher_tokens file with the format:
 
 ----
 export RANCHER_ACCESS_KEY=token-xxxxx

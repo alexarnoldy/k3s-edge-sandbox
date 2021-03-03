@@ -7,12 +7,12 @@ provider "rancher2" {
 }
 
 resource "rancher2_cluster" "k3s-cluster-instance" {
-  name = "k3ai-${var.edge_location}"
+  name = "k3s-${var.edge_location}"
   description = "K3s imported cluster"
 }
 
 data "rancher2_cluster" "k3s-cluster" {
-  name = "k3ai-${var.edge_location}"
+  name = "k3s-${var.edge_location}"
   depends_on = [rancher2_cluster.k3s-cluster-instance]
 }
 

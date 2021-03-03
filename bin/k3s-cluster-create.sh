@@ -121,13 +121,13 @@ rm -f ${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 
 
 ## Use k3sup to install the first server node
-k3sup install --ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable  --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3ai-${EDGE_LOCATION}
+k3sup install --ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable  --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
 
 
 
 ## Wait until the K3s server node is ready before joining the rest of the nodes
 export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
-kubectl config set-context k3ai-${EDGE_LOCATION}
+kubectl config set-context k3s-${EDGE_LOCATION}
 sleep 5
 kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns
 
@@ -153,8 +153,8 @@ done
 
 ## Run the kubectl command to deploy the cattle-agent and fleet-agent
 export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
-kubectl config use-context k3ai-${EDGE_LOCATION}
-bash -c "$(grep -w command ~/k3ai-sandbox-demo/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
+kubectl config use-context k3s-${EDGE_LOCATION}
+bash -c "$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
 
 echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
@@ -166,4 +166,4 @@ echo ""
 chmod 755 ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
 echo ""; echo "It may take a few more minutes for the ${EDGE_LOCATION} cluster to finish getting ready for use."
-echo ""; echo -e "Run the command sequence: \`${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; export KUBECONFIG=${HOME}/.kube/kubeconfig-\${EDGE_LOCATION}; kubectl config set-context k3ai-\${EDGE_LOCATION}${NC}\` to work with the k3ai-${EDGE_LOCATION} cluster"
+echo ""; echo -e "Run the command sequence: \`${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; export KUBECONFIG=${HOME}/.kube/kubeconfig-\${EDGE_LOCATION}; kubectl config set-context k3s-\${EDGE_LOCATION}${NC}\` to work with the k3s-${EDGE_LOCATION} cluster"

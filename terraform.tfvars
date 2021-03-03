@@ -16,7 +16,7 @@ image_uri = "images/openSUSE-Leap-15.2-JeOS.x86_64-15.2-OpenStack-Cloud-Build31.
 
 # Identifier to make all your resources unique and avoid clashes with other users of this terraform project
 ## Set edge_location with the bin/k3s_create_cluster.sh script
-#edge_location = "k3ai-sandbox-demo"
+#edge_location = "k3s-sandbox-demo"
 
 # Number of server nodes
 ## Set k3s_servers with the bin/k3s_create_cluster.sh script

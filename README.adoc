@@ -85,6 +85,7 @@ NOTE: server_vcpu and server_memory should be specified on the first server entr
 10.111.4.14	agent.sydney.sandbox.local #agent_vcpu=4 agent_memory=8192
  
 #### K3ai Sandbox Demo with FQDNs, note that order in which the nodes are listed in not important
+10.111.5.13	cancun-server-2.edge.sandbox.local
 10.111.5.12	cancun-server-1.edge.sandbox.local
 10.111.5.11	cancun-server-0.edge.sandbox.local #server_vcpu=2 server_memory=2048
 10.111.5.15	cancun-agent-1.edge.sandbox.local

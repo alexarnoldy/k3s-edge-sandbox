@@ -19,13 +19,15 @@ image_uri = "images/openSUSE-Leap-15.2-JeOS.x86_64-15.2-OpenStack-Cloud-Build31.
 #edge_location = "k3s-sandbox-demo"
 
 # Number of server nodes
-## Set k3s_servers with the bin/k3s_create_cluster.sh script
+## k3s_servers is based on entries in /etc/hosts or DNS
+## server_memory and server_vcpu can be overriden with entries in /etc/hosts, if used
 #k3s_servers       = 1
 server_memory = 2048
 server_vcpu   = 2
 
 # Number of agent nodes
 ## Set k3s_agents with the bin/k3s_create_cluster.sh script
+## agent_memory and agent_vcpu can be overriden with entries in /etc/hosts, if used
 #k3s_agents       = 2
 agent_memory = 2048
 agent_vcpu   = 2

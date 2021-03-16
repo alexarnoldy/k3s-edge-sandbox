@@ -1,5 +1,5 @@
 provider "rancher2" {
-  api_url    = "https://rancher.susealliances.com/v3"
+  api_url    = "https://rancher-demo.susealliances.com/v3"
 ## Provide access_key with environmental variable RANCHER_ACCESS_KEY 
 #  access_key = var.rancher2_access_key
 ## Provide secret_key with environmental variable RANCHER_SECRET_KEY 

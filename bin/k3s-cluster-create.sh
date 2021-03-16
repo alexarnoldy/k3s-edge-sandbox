@@ -47,6 +47,10 @@ done
 [ -z "$2" ] && DOMAIN_NAME=[A-Za-b0-9] || DOMAIN_NAME=$2
 
 
+## Set EDITOR to vi, if not set
+#[ -z "$EDITOR" ] && export EDITOR=vi
+
+
 ## Discover up to 3 server nodes to be used in this edge location.
 ## Note that the array is populated with the IP addresses being the even indices
 ## and the associated hostnames being the subsequent odd indices
@@ -57,10 +61,11 @@ ALL_SERVERS=($(getent hosts | grep -i ${EDGE_LOCATION} | grep -i ${DOMAIN_NAME} 
 
 
 
-## Test to see if the provided argument matches a defined edge location
+## FIRST_SERVER_HOSTNAME will used in the following test and later in the script
 FIRST_SERVER_HOSTNAME=${ALL_SERVERS[1]}
 ## FIRST_SERVER_IP will be used later in the script
 FIRST_SERVER_IP=${ALL_SERVERS[0]}
+## Test to see if the provided argument matches a defined edge location
 [ -z "${FIRST_SERVER_HOSTNAME}" ]  && echo -e "Edge location \"${LCYAN}${EDGE_LOCATION}${NC}\" is not defined." && exit
 
 
@@ -78,6 +83,12 @@ NUM_SERVERS=$(echo $((${#ALL_SERVERS[@]} / 2 )))
 NUM_AGENTS=$(echo $((${#ALL_AGENTS[@]} / 2 )))
 
 
+## SERVER_ALLOCATION and AGENT_ALLOCATION are arrays where the first element (0) is vcpu and second 
+## element (1) is memory, as taken from the first server and agent entry for the edge location in /etc/hosts
+SERVER_ALLOCATION=($(grep ${ALL_SERVERS[1]} /etc/hosts | awk -F# '{print$2}'))
+AGENT_ALLOCATION=($(grep ${ALL_AGENTS[1]} /etc/hosts | awk -F# '{print$2}'))
+
+
 ##Example of how to iterate over the IPs in the array
 #for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do echo ${ALL_AGENTS[INDEX]}; done
 ##Example of how to iterate over the hostnames in the array
@@ -92,7 +103,11 @@ SUBNET=$(echo ${ALL_SERVERS[0]} | awk -F. '{print$1"."$2"."$3".0/24"}')
 ## Create a custom tfvars file for this deployment
 cat <<EOF> state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
 k3s_servers = ${NUM_SERVERS}
+${SERVER_ALLOCATION[0]}
+${SERVER_ALLOCATION[1]}
 k3s_agents = ${NUM_AGENTS}
+${AGENT_ALLOCATION[0]}
+${AGENT_ALLOCATION[1]}
 edge_location = "${EDGE_LOCATION}"
 cidr_mapping = {${EDGE_LOCATION} = "${SUBNET}"}
 EOF

@@ -49,12 +49,14 @@ export RANCHER_SECRET_KEY=xxxxxxxxxxxxxxxx
 * Place the openSUSE-Leap-15.2-JeOS.x86_64-15.2-OpenStack-Cloud.qcow2 image in the images/ directory
 * Update the terraform.tfvars file with: 
 ** The SSH public key for the KVM host user (the authorized_keys list at the bottom of the file)
-* Update the rancher2.tf file with that "api_url" with the hostname or IP address of the Rancher MCM server
+* Update the rancher2.tf file with:
+** The "api_url" with the hostname or IP address of the Rancher MCM server
+** Uncomment "insecure = true" if using self-signed certificates and not providing them to Terraform
 * Define the simulated edge locations, their nodes, and the vcpu/memory allocation per node in the KVM host's /etc/host file 
 ** See the examples below for specific guidance
 * From inside this directory, run `terraform init`
-* Create a simulated edge location with command `./bin/bin/k3s-cluster-create.sh <edge location> <optional domain name>`
-** I.e. `./bin/bin/k3s-cluster-create.sh cancun edge.sandbox.local`
+* Create a simulated edge location with command `./bin/k3s-cluster-create.sh <edge location> <optional domain name>`
+** I.e. `./bin/k3s-cluster-create.sh cancun edge.sandbox.local`
 
 
 NOTE: All servers must have "server" in their name and agents must have "agent" in their name. All nodes for a specific edge location must have the name of that edge location either in their name or domain name.

@@ -39,8 +39,8 @@ variable "packages" {
 
   default = [
     "wget",
-    "kernel-default",
-    "-kernel-default-base",
+#    "kernel-default",
+#    "-kernel-default-base",
     "which"
   ]
 

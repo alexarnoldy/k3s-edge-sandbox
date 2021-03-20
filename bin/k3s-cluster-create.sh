@@ -57,7 +57,7 @@ done
 ## i.e. ${ALL_SERVERS[0]} is the IP of the first server and ${ALL_SERVERS[1]} is
 ## the hostname of the first server
 #ALL_SERVERS=($(getent hosts ${EDGE_LOCATION}-server-{0..2}))
-ALL_SERVERS=($(getent hosts | grep -i ${EDGE_LOCATION} | grep -i ${DOMAIN_NAME} | grep -i server | sort -k 1,1))
+ALL_SERVERS=($(getent hosts | grep -iw ${EDGE_LOCATION} | grep -i ${DOMAIN_NAME} | grep -i server | sort -k 1,1))
 
 
 
@@ -71,7 +71,7 @@ FIRST_SERVER_IP=${ALL_SERVERS[0]}
 
 ## Discover up to 25 agent nodes to be used in this edge location. Adjust above 25 as needed.
 #ALL_AGENTS=($(getent hosts ${EDGE_LOCATION}-agent-{0..25}))
-ALL_AGENTS=($(getent hosts | grep -i ${EDGE_LOCATION} | grep -i ${DOMAIN_NAME} | grep -i agent | sort -k 1,1))
+ALL_AGENTS=($(getent hosts | grep -iw ${EDGE_LOCATION} | grep -i ${DOMAIN_NAME} | grep -i agent | sort -k 1,1))
 
 
 ## Establish the last index in the arrays
@@ -86,7 +86,8 @@ NUM_AGENTS=$(echo $((${#ALL_AGENTS[@]} / 2 )))
 ## SERVER_ALLOCATION and AGENT_ALLOCATION are arrays where the first element (0) is vcpu and second 
 ## element (1) is memory, as taken from the first server and agent entry for the edge location in /etc/hosts
 SERVER_ALLOCATION=($(grep ${ALL_SERVERS[1]} /etc/hosts | awk -F# '{print$2}'))
-AGENT_ALLOCATION=($(grep ${ALL_AGENTS[1]} /etc/hosts | awk -F# '{print$2}'))
+## Set AGENT_ALLOCATION only if there are agents specified
+[ ${#ALL_AGENTS[@]} -gt 0 ] && AGENT_ALLOCATION=($(grep ${ALL_AGENTS[1]} /etc/hosts | awk -F# '{print$2}'))
 
 
 ##Example of how to iterate over the IPs in the array
@@ -101,6 +102,7 @@ AGENT_ALLOCATION=($(grep ${ALL_AGENTS[1]} /etc/hosts | awk -F# '{print$2}'))
 SUBNET=$(echo ${ALL_SERVERS[0]} | awk -F. '{print$1"."$2"."$3".0/24"}')
 
 ## Create a custom tfvars file for this deployment
+mkdir state/${EDGE_LOCATION}/
 cat <<EOF> state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
 k3s_servers = ${NUM_SERVERS}
 ${SERVER_ALLOCATION[0]}
@@ -134,9 +136,13 @@ sleep 10
 ## Remove a previous config file if it exists
 rm -f ${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 
+## Test to see if more than one server is specified
+[ ${#ALL_SERVERS[@]} -gt 2 ] && CLUSTER="--cluster" || CLUSTER=""
 
 ## Use k3sup to install the first server node
-k3sup install --ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable  --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
+k3sup install --ip ${FIRST_SERVER_IP} ${CLUSTER} --sudo --user ${SSH_USER} --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
+## --k3s-channel doesn't work with k3sup v0.9.6	
+#k3sup install --ip ${FIRST_SERVER_IP} ${CLUSTER} --sudo --user ${SSH_USER} --k3s-channel stable  --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
 
 
 
@@ -148,28 +154,37 @@ kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/
 
 
 
-###### Broken until a test that inserts --cluster is created
 ## Join the remaining two server nodes to the cluster
-#for INDEX in 2 4; do 
+for INDEX in 2 4; do 
+	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} 
+## --k3s-channel doesn't work with k3sup v0.9.6	
 #	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
-#	sleep 5
-#done
-###### Broken until a test that inserts --cluster is created
-
-
-
-## Join all agent nodes to the cluster
-for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do 
-	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
 	sleep 5
 done
 
 
 
-## Run the kubectl command to deploy the cattle-agent and fleet-agent
+## Join all agent nodes to the cluster
+for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do 
+	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} 
+## --k3s-channel doesn't work with k3sup v0.9.6	
+#	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
+	sleep 5
+done
+
+
+
+## Extract and apply the string to deploy the cattle-agent and fleet-agent
 export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 kubectl config use-context k3s-${EDGE_LOCATION}
-bash -c "$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
+
+CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//' | awk '{print$4}')
+
+## Apply securely, or attempt insecurely if it fails (for any reason)
+kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }
+
+## Command before attempting to deal with self-signed certs on Rancher server (above)
+#bash -c "$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
 
 echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 

@@ -1,4 +1,11 @@
 apiVersion: apps/v1
+kind: Namespace
+metadata:
+  name: jupyter
+
+---
+
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jupyter-minimal

@@ -7,18 +7,17 @@
 ## 02/17/2021 - alex.arnoldy@suse.com
 
 ################################################################################################
-##		This script relies on /etc/hosts or DNS (DNS hasn't been tested yet and doesn't
-## 		support domain names yet) for IPAM as well as hostname resolution 
-## IMPORTANT: 	to discover simulated edge locations. 
-##		Ensure either /etc/hosts or DNS is configured to resolve hostnames in the format
+##		This script relies on /etc/hosts to define the simulated edge locations, for 
+##		IPAM, hostname resolution, vcpu & memory specs and cluster labels
+## IMPORTANT: 	Ensure /etc/hosts is configured to resolve hostnames in the format
 ## 		of "edge-location"-server-[0-2] and "edge-location"-agent-[0-N]
 ##		i.e. bangkok-server-0 and bangkok-agent-5
 ################################################################################################
-##		    This script currently does not support HA server nodes.
-## SUPER IMPORTANT: Defining more than one server node won't add any value and could potentially
-## 		    break the cluster.
+##		    Using this script to deploy HA server nodes requires a load balancer 
+## SUPER IMPORTANT: for the Kubernetes API server, port 6443
 ################################################################################################
 
+## The Rancher server is identified in the rancher2.tf file
 ## Rancher tokens need to be kept in a ~/.rancher_tokens file in this user's home directory
 ## Format needs to be:
 ## export RANCHER_ACCESS_KEY=token-xxxxx
@@ -84,7 +83,8 @@ NUM_AGENTS=$(echo $((${#ALL_AGENTS[@]} / 2 )))
 
 
 ## SERVER_ALLOCATION and AGENT_ALLOCATION are arrays where the first element (0) is vcpu and second 
-## element (1) is memory, as taken from the first server and agent entry for the edge location in /etc/hosts
+## element (1) is memory. These are taken from the first server and first agent entry for the 
+## edge location in /etc/hosts
 SERVER_ALLOCATION=($(grep ${ALL_SERVERS[1]} /etc/hosts | awk -F# '{print$2}'))
 ## Set AGENT_ALLOCATION only if there are agents specified
 [ ${#ALL_AGENTS[@]} -gt 0 ] && AGENT_ALLOCATION=($(grep ${ALL_AGENTS[1]} /etc/hosts | awk -F# '{print$2}'))
@@ -98,11 +98,14 @@ SERVER_ALLOCATION=($(grep ${ALL_SERVERS[1]} /etc/hosts | awk -F# '{print$2}'))
 
 ## Create the JeOS cluster nodes. Saves the state files to specific locations to keep things tidy
 ## Determine the CIDR denoted SUBNET based on the IP address of the first server
-#SUBNET=$(getent hosts ${EDGE_LOCATION}-server-0 | awk '{print$1}' | awk -F. '{print$1"."$2"."$3".0/24"}')
 SUBNET=$(echo ${ALL_SERVERS[0]} | awk -F. '{print$1"."$2"."$3".0/24"}')
 
+## Exctract the cluster_labels
+CLUSTER_LABELS=$(grep ${ALL_SERVERS[1]} /etc/hosts | awk -F"labels: " '{print$2}')
+
+
 ## Create a custom tfvars file for this deployment
-mkdir state/${EDGE_LOCATION}/
+mkdir -p state/${EDGE_LOCATION}/
 cat <<EOF> state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
 k3s_servers = ${NUM_SERVERS}
 ${SERVER_ALLOCATION[0]}
@@ -112,6 +115,7 @@ ${AGENT_ALLOCATION[0]}
 ${AGENT_ALLOCATION[1]}
 edge_location = "${EDGE_LOCATION}"
 cidr_mapping = {${EDGE_LOCATION} = "${SUBNET}"}
+cluster_labels = {${CLUSTER_LABELS}}
 EOF
 
 terraform apply -auto-approve --state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
@@ -121,13 +125,13 @@ mkdir -p ~/.kube/
 
 
 ## Ensure the server node is updated and ready before installing K3s 
-ssh-keygen -q -R ${FIRST_SERVER_IP} -f ${HOME}/.ssh/known_hosts
+ssh-keygen -q -R ${FIRST_SERVER_IP} -f ${HOME}/.ssh/known_hosts &> /dev/null
 
 ## This tests for a shutdown entry to be added to the last log, indicating the node has rebooted
-until ssh -o StrictHostKeyChecking=no opensuse@${FIRST_SERVER_IP} last -x | grep shutdown; do echo "Waiting for ${FIRST_SERVER_HOSTNAME} to boot up and update its software..." && sleep 30; done
+until ssh -o StrictHostKeyChecking=no opensuse@${FIRST_SERVER_IP} last -x | grep shutdown &> /dev/null; do echo "Waiting for ${FIRST_SERVER_HOSTNAME} to boot up and update its software..." && sleep 30; done
 
 ## Test for sshd to come online after the reboot, then wait ten seconds more for the node to finish booting
-until nc -zv ${FIRST_SERVER_IP} 22; do echo "Waiting until ${FIRST_SERVER_HOSTNAME} finishes rebooting..." && sleep 5; done
+until nc -zv ${FIRST_SERVER_IP} 22 &> /dev/null; do echo "Waiting until ${FIRST_SERVER_HOSTNAME} finishes rebooting..." && sleep 5; done
 echo "Waiting for someone who truly gets me..."
 sleep 10
 
@@ -156,6 +160,7 @@ kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/
 
 ## Join the remaining two server nodes to the cluster
 for INDEX in 2 4; do 
+#for INDEX in $(seq 0 2 ${FINAL_SERVER_INDEX}); do 
 	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} 
 ## --k3s-channel doesn't work with k3sup v0.9.6	
 #	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
@@ -183,9 +188,36 @@ CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCAT
 ## Apply securely, or attempt insecurely if it fails (for any reason)
 kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }
 
+###### This section was the original attempt to label the clusters
+###### The new method adds a label map to the rancher2 resource (in the rancher2.tf file)
 ## Command before attempting to deal with self-signed certs on Rancher server (above)
 #bash -c "$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//')"
 
+## Wait until the Fleet agent has deployed before continuing
+#until kubectl get namespace fleet-system ; do echo "Waiting for fleet-system namespace to be created (normally about 2 minutes)" && sleep 60; done
+#sleep 10
+#kubectl -n fleet-system wait --for=condition=available --timeout=600s deployment/fleet-agent
+
+
+## Apply labels to the Fleet cluster object (via the Rancher server cluster), as defined in /etc/hosts, 
+## specified with a space separated list after "labels:" and following the vCPU and memory specs
+
+## Find the cluster identity and namespace in the Rancher server cluster
+#export KUBECONFIG=~/.kube/kubeconfig-rancher-server
+#until kubectl get clusters.fleet.cattle.io -A | grep ${EDGE_LOCATION}; do echo "Waiting for fleet-manager" && sleep 10; done
+#
+#FLEET_CLUSTER=($(kubectl get clusters.fleet.cattle.io -A | grep ${EDGE_LOCATION}))
+#CLUSTER_LABELS=($(grep ${ALL_SERVERS[1]} /etc/hosts | awk -F"labels: " '{print$2}'))
+#FINAL_LABEL_INDEX=$(echo $((${#CLUSTER_LABELS[@]}-1)))
+#
+#echo "Show Fleet cluster object:"
+#kubectl get clusters.fleet.cattle.io -A | grep ${EDGE_LOCATION}
+#for INDEX in $(seq 0 1 ${FINAL_LABEL_INDEX}); do
+#	kubectl label cluster.fleet.cattle.io ${FLEET_CLUSTER[1]} -n ${FLEET_CLUSTER[0]} ${CLUSTER_LABELS[INDEX]} 
+#done
+###### 
+
+##Final messages for using and destroying the cluster
 echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
 echo -e "######################## ${RED}TO DESTROY THIS CLUSTER, USE THE COMMAND:${LCYAN} ./bin/destroy_${EDGE_LOCATION}_edge_location.sh${NC} "

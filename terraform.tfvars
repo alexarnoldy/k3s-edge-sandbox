@@ -12,7 +12,7 @@ libvirt_uri = "qemu:///system"
 # URL of the image to use
 # EXAMPLE:
 # image_uri = "http://download.suse.com/..."
-image_uri = "images/openSUSE-Leap-15.2-JeOS.x86_64-15.2-patched-03162020.qcow2"
+image_uri = "images/openSUSE-Leap-15.2-JeOS.x86_64-15.2-patched-03232021.qcow2"
 #image_uri = "images/openSUSE-Leap-15.2-JeOS.x86_64-15.2-OpenStack-Cloud-Build31.348.qcow2"
 
 # Identifier to make all your resources unique and avoid clashes with other users of this terraform project

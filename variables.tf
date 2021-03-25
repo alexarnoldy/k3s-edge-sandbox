@@ -39,8 +39,8 @@ variable "packages" {
 
   default = [
     "wget",
-#    "kernel-default",
-#    "-kernel-default-base",
+    "kernel-default",
+    "-kernel-default-base",
     "which"
   ]
 
@@ -112,4 +112,12 @@ variable "agent_vcpu" {
 variable "agent_disk_size" {
   default     = "25769803776"
   description = "Disk size (in bytes)"
+}
+
+variable "cluster_labels" {
+  type        = map
+  default     = {
+    "status" = "standby"
+  }
+  description = "Labels to be applied to imported cluster object in Rancher"
 }

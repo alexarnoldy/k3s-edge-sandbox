@@ -6,3 +6,4 @@ agent_vcpu=4
 agent_memory=8192
 edge_location = "sydney"
 cidr_mapping = {sydney = "10.111.4.0/24"}
+cluster_labels = {}

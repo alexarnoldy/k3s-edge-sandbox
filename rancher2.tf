@@ -13,6 +13,8 @@ provider "rancher2" {
 resource "rancher2_cluster" "k3s-cluster-instance" {
   name = "k3s-${var.edge_location}"
   description = "K3s imported cluster"
+  labels = var.cluster_labels
+#  labels = tomap({"location" = "north", "customer" = "BigMoney"})
 }
 
 data "rancher2_cluster" "k3s-cluster" {

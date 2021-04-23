@@ -118,8 +118,13 @@ cidr_mapping = {${EDGE_LOCATION} = "${SUBNET}"}
 cluster_labels = {${CLUSTER_LABELS}}
 EOF
 
+mv rancher2.tf .rancher2.tf
+mv output.tf .output.tf
+
 terraform apply -auto-approve --state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
 
+mv .rancher2.tf rancher2.tf
+mv .output.tf output.tf
 
 mkdir -p ~/.kube/
 
@@ -141,53 +146,53 @@ sleep 10
 rm -f ${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 
 ## Test to see if more than one server is specified
-[ ${#ALL_SERVERS[@]} -gt 2 ] && CLUSTER="--cluster" || CLUSTER=""
+#[ ${#ALL_SERVERS[@]} -gt 2 ] && CLUSTER="--cluster" || CLUSTER=""
 
 ## Use k3sup to install the first server node
-k3sup install --ip ${FIRST_SERVER_IP} ${CLUSTER} --sudo --user ${SSH_USER} --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
+#k3sup install --ip ${FIRST_SERVER_IP} ${CLUSTER} --sudo --user ${SSH_USER} --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
 ## --k3s-channel doesn't work with k3sup v0.9.6	
 #k3sup install --ip ${FIRST_SERVER_IP} ${CLUSTER} --sudo --user ${SSH_USER} --k3s-channel stable  --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
 
 
 
 ## Wait until the K3s server node is ready before joining the rest of the nodes
-export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
-kubectl config set-context k3s-${EDGE_LOCATION}
-until kubectl get deployment -n kube-system coredns &> /dev/null; do echo "Waiting for the Kubernetes API server to respond..." && sleep 10; done
-sleep 5
-kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns
+#export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
+#kubectl config set-context k3s-${EDGE_LOCATION}
+#until kubectl get deployment -n kube-system coredns &> /dev/null; do echo "Waiting for the Kubernetes API server to respond..." && sleep 10; done
+#sleep 5
+#kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns
 
 
 
 ## Join the remaining two server nodes to the cluster
-for INDEX in 2 4; do 
-#for INDEX in $(seq 0 2 ${FINAL_SERVER_INDEX}); do 
-	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} 
-## --k3s-channel doesn't work with k3sup v0.9.6	
-#	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
-	sleep 5
-done
+#for INDEX in 2 4; do 
+##for INDEX in $(seq 0 2 ${FINAL_SERVER_INDEX}); do 
+#	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} 
+### --k3s-channel doesn't work with k3sup v0.9.6	
+##	k3sup join --ip ${ALL_SERVERS[INDEX]} --server --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
+#	sleep 5
+#done
 
 
 
 ## Join all agent nodes to the cluster
-for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do 
-	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} 
-## --k3s-channel doesn't work with k3sup v0.9.6	
-#	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
-	sleep 5
-done
+#for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do 
+#	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} 
+### --k3s-channel doesn't work with k3sup v0.9.6	
+##	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
+#	sleep 5
+#done
 
 
 
 ## Extract and apply the string to deploy the cattle-agent and fleet-agent
-export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
-kubectl config use-context k3s-${EDGE_LOCATION}
-
-CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//' | awk '{print$4}')
-
-## Apply securely, or attempt insecurely if it fails (for any reason)
-kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }
+#export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
+#kubectl config use-context k3s-${EDGE_LOCATION}
+#
+#CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//' | awk '{print$4}')
+#
+### Apply securely, or attempt insecurely if it fails (for any reason)
+#kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }
 
 ###### This section was the original attempt to label the clusters
 ###### The new method adds a label map to the rancher2 resource (in the rancher2.tf file)
@@ -219,7 +224,10 @@ kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT
 ###### 
 
 ##Final messages for using and destroying the cluster
-echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
+echo "mv rancher2.tf .rancher2.tf; mv output.tf .output.tf" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
+
+echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" >> ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
+echo "mv .rancher2.tf rancher2.tf; mv .output.tf output.tf" >> ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
 echo -e "######################## ${RED}TO DESTROY THIS CLUSTER, USE THE COMMAND:${LCYAN} ./bin/destroy_${EDGE_LOCATION}_edge_location.sh${NC} "
 #echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; source ~/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"
@@ -228,5 +236,5 @@ echo ""
 
 chmod 755 ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
-echo ""; echo "It may take a few more minutes for the ${EDGE_LOCATION} cluster to finish getting ready for use."
-echo ""; echo -e "Run the command sequence: \`${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; export KUBECONFIG=${HOME}/.kube/kubeconfig-\${EDGE_LOCATION}; kubectl config set-context k3s-\${EDGE_LOCATION}${NC}\` to work with the k3s-${EDGE_LOCATION} cluster"
+#echo ""; echo "It may take a few more minutes for the ${EDGE_LOCATION} cluster to finish getting ready for use."
+#echo ""; echo -e "Run the command sequence: \`${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; export KUBECONFIG=${HOME}/.kube/kubeconfig-\${EDGE_LOCATION}; kubectl config set-context k3s-\${EDGE_LOCATION}${NC}\` to work with the k3s-${EDGE_LOCATION} cluster"

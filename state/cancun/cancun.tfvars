@@ -6,3 +6,4 @@ agent_vcpu=4
 agent_memory=8192
 edge_location = "cancun"
 cidr_mapping = {cancun = "10.111.5.0/24"}
+cluster_labels = {}

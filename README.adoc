@@ -22,9 +22,7 @@ It's based on openSUSE 15.2, which is compatible with SLES 15 SP2, so this could
 .The following required software can obtained from various sources but all are available from software.opensuse.org
 * kubectl
 ** https://software.opensuse.org/package/kubectl
-* terraform
-** https://software.opensuse.org/package/terraform
-* terraform-provider-libvirt
+* terraform-provider-libvirt (also installs Terraform)
 ** https://software.opensuse.org/package/terraform-provider-libvirt
 * k3sup
 ** https://software.opensuse.org/package/k3sup

@@ -33,6 +33,9 @@ It's based on openSUSE 15.2, which is compatible with SLES 15 SP2, so this could
 *** Select JeOS, then OpenStack-Cloud
 
 .Steps to prepare this environment
+
+NOTE: It is recommended to test a VM deployment and NAT network on the KVM host to ensure it can deploy correctly before adding the automation.
+
 * Deploy a Rancher MCM server anywhere that it can be reached by the K3s clusters on port 443
 ** Public cloud providers are common option as they allow easy access from the Internet or private networks with outward HTTPS access
 ** Various deployment options can be found at: https://rancher.com/docs/rancher/v2.x/en/quick-start-guide/deployment/

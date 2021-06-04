@@ -1,8 +1,9 @@
 provider "rancher2" {
-  api_url    = "https://rancher-demo.susealliances.com/v3"
-## Provide access_key with environmental variable RANCHER_ACCESS_KEY 
+## Currently provides access_key with environmental variable RANCHER_ACCESS_KEY 
+## To override, uncomment below and provide the key through a variable
 #  access_key = var.rancher2_access_key
-## Provide secret_key with environmental variable RANCHER_SECRET_KEY 
+## Currently provides secret_key with environmental variable RANCHER_SECRET_KEY
+## To override, uncomment below and provide the key through a variable
 #  secret_key = var.rancher2_secret_key
 ####
 # Uncomment the "insecure = true" line if using self-signed certs and not providing them to Terraform

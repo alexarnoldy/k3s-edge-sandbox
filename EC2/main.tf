@@ -37,9 +37,7 @@ module "ec2_first_server_instance" {
   name           = "${var.edge_location}-server"
   ami            = var.instance_ami
   instance_type  = var.server_instance_type
-  key_name       = "aarnoldy_laptop"
-  #  key_name		= "rancher-server"
-  #  key_name		= aws_key_pair.aarnoldy_laptop.id
+  key_name       = var.ssh_public_key
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
 #  user_data = data.template_file.user_data.rendered
@@ -62,12 +60,11 @@ module "ec2_server_instances" {
   version = "2.12.0"
 
   name           = "${var.edge_location}-server"
-  instance_count = var.num_servers
+#  instance_count = var.num_servers 
+  instance_count = (var.num_servers - 1)
   ami            = var.instance_ami
   instance_type  = var.server_instance_type
-  key_name       = "aarnoldy_laptop"
-  #  key_name		= "rancher-server"
-  #  key_name		= aws_key_pair.aarnoldy_laptop.id
+  key_name       = var.ssh_public_key
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
 
@@ -86,7 +83,7 @@ module "ec2_agent_instances" {
   instance_count = var.num_agents
   ami            = var.instance_ami
   instance_type  = var.agent_instance_type
-#  key_name       = "aarnoldy_laptop"
+#  key_name       = var.ssh_public_key
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
 
@@ -97,7 +94,7 @@ module "ec2_agent_instances" {
   depends_on = [module.ec2_first_server_instance]
 }
 
-#resource "aws_key_pair" "aarnoldy_laptop" {
+#resource "aws_key_pair" "ec2-key-pair" {
 #  key_name   = var.ssh_authorized_keys
 #  public_key = var.ssh_public_key
 #}
@@ -177,7 +174,7 @@ data "rancher2_cluster" "k3s-cluster" {
 #module "website_s3_bucket" {
 #  source = "./modules/aws-s3-static-website-bucket"
 #
-#  bucket_name = "aarnoldy-20210509"
+#  bucket_name = "bucket-20210509"
 #
 #  tags = {
 #    Terraform   = "true"

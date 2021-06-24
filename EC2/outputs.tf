@@ -15,6 +15,21 @@ output "ec2_first_server_instance_private_ip" {
   value       = module.ec2_first_server_instance.private_ip
 }
 
+output "ec2_server_instances_public_ip" {
+  description = "Public IP address of first EC2 instance"
+  value       = module.ec2_server_instances.public_ip
+}
+
+output "ec2_agent_instances_public_ip" {
+  description = "Public IP address of first EC2 instance"
+  value       = module.ec2_agent_instances.public_ip
+}
+
+output "ssh_key_name" {
+  description = "Public IP address of first EC2 instance"
+  value       = module.ec2_server_instances.key_name
+}
+
 output "vpc_id" {
   value = module.vpc.vpc_id
 }

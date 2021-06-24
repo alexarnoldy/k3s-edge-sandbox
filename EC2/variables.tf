@@ -122,15 +122,14 @@ variable "agent_instance_type" {
   default     = "t2.small"
 }
 
-variable "ssh_authorized_keys" {
-  type    = string
-  default = "aarnoldy_laptop"
-}
+#variable "ssh_authorized_keys" {
+#  type    = string
+#}
 
 variable "ssh_public_key" {
-  description = "Type for the instance"
+  description = "Key to connect to the instance"
   type        = string
-  default     = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXxkzrWJBzUnAxPX0ze+dzrCb0WMkpqQmGUnTqclrVFoPWduzr4W4KVUl1v7DTIrc0ccYHiWdKnrYvhst5E/szJTalKJjgEI6vtCDX/gN1VYOhCe9Qgxp1hSfNGNDSFOp2di1+N0A/XXlkkFqmz7B0d/ibgHnv+h+9vniKmXs7SW2GuuvpRoBaL38N4fkC5GHmLeIuPuwPCG2OVOHpAixr2obYm5QCl0n4mM77QlDpLtgh8ZD3xmOY1sRCGDvqafbZ0CuGfloApTBxxupDrU/XyLfXDNZR7wrxzw3Gom+oZR1pfKwXW/ym3/ko/Gfsex8AOTwPLFiaGynkT6OWgfnV aarnoldy@aarnoldy-laptop"
+  default     = "ec2_key_pair"
 }
 
 variable "cluster_labels" {

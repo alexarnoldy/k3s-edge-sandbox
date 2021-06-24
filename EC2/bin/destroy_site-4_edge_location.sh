@@ -1,1 +1,0 @@
-export EDGE_LOCATION=site-4; source /home/AArnoldy/.rancher_tokens; terraform destroy -auto-approve --state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars

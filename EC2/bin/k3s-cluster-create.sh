@@ -116,14 +116,18 @@ EOF
 
 terraform apply -auto-approve --state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
 
-ALL_SERVER_PUBLIC_IPS=($(terraform output -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ec2_instance_public_ips | egrep -v "\[|\]" | awk -F\, '{print$1}' | sed 's/\"//g'))
+ALL_SERVER_PUBLIC_IPS=($(terraform output -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ec2_server_instances_public_ip | egrep -v "\[|\]" | awk -F\, '{print$1}' | sed 's/\"//g'))
 #echo ${ALL_SERVER_PUBLIC_IPS[@]}
-FIRST_SERVER_PUBLIC_IP=$(echo ${ALL_SERVER_PUBLIC_IPS[0]})
+FIRST_SERVER_PUBLIC_IP=$(terraform output -json -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ec2_first_server_instance_public_ip | awk -F\" '{print$2}')
 #echo ${FIRST_SERVER_PUBLIC_IP}
 
-ALL_SERVER_PRIVATE_IPS=($(terraform output -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ec2_instance_private_ips | egrep -v "\[|\]" | awk -F\, '{print$1}' | sed 's/\"//g'))
+ALL_AGENT_PUBLIC_IPS=($(terraform output -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ec2_agent_instances_public_ip | egrep -v "\[|\]" | awk -F\, '{print$1}' | sed 's/\"//g'))
+
+#ALL_SERVER_PRIVATE_IPS=($(terraform output -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ec2_instance_private_ips | egrep -v "\[|\]" | awk -F\, '{print$1}' | sed 's/\"//g'))
 #echo ${ALL_SERVER_PRIVATE_IPS[@]}
-FIRST_SERVER_PRIVATE_IP=$(echo ${ALL_SERVER_PRIVATE_IPS[0]})
+FIRST_SERVER_PRIVATE_IP=$(terraform output -json -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ec2_first_server_instance_private_ip | awk -F\" '{print$2}')
+
+SSH_KEY_NAME=$(terraform output -json -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ssh_key_name  | awk -F\" '{print$2}')
 
 mkdir -p ~/.kube/
 
@@ -152,42 +156,34 @@ rm -f ${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 [ ${ALL_SERVERS} -gt 2 ] && CLUSTER="--cluster-init" || CLUSTER=""
 
 ## Install first server node
-K3s_VERSION="v1.20.4+k3s1"; ssh -q -oStrictHostKeyChecking=no ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "K3s_VERSION="v1.20.4+k3s1" ; curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644' sh -s -"
+K3s_VERSION="v1.20.4+k3s1"; ssh -q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "K3s_VERSION="v1.20.4+k3s1" ; curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644' sh -s -"
 
 ## Enable to download the kubeconfig file for this cluster
 #scp ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}:/etc/rancher/k3s/k3s.yaml ${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 
 
 
-## Use k3sup to install the first server node
-#k3sup install --ip ${FIRST_SERVER_PUBLIC_IP} ${CLUSTER} --sudo --user ${SSH_USER} --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
-## --k3s-channel doesn't work with k3sup v0.9.6	
-#k3sup install --ip ${FIRST_SERVER_IP} ${CLUSTER} --sudo --user ${SSH_USER} --k3s-channel stable  --local-path ${HOME}/.kube/kubeconfig-${EDGE_LOCATION} --context k3s-${EDGE_LOCATION}
-
-
 
 ## Wait until the K3s server node is ready before joining the rest of the nodes
-#export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
-#kubectl config set-context k3s-${EDGE_LOCATION}
-ssh -q ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "until kubectl get deployment -n kube-system coredns &> /dev/null; do echo "Waiting for the Kubernetes API server to respond..." && sleep 10; done"
+ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "until kubectl get deployment -n kube-system coredns &> /dev/null; do echo "Waiting for the Kubernetes API server to respond..." && sleep 10; done"
 sleep 5
-ssh -q ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns"
+ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns"
 
 ## Join the remaining two server nodes to the cluster
-	NODE_TOKEN=$(ssh -q ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+	NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 
 
-for INDEX in 1 2; do 
+for INDEX in 0 1; do 
 cat <<EOF> /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
 FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
-NODE_TOKEN=$(ssh -q ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 K3s_VERSION=${INSTALLED_K3s_VERSION};
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 K3S_TOKEN=${NODE_TOKEN} K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC='server' sh -
 EOF
-	scp -q -o StrictHostKeyChecking=no /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]}:~/ 
-	ssh -q -o StrictHostKeyChecking=no ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]} "bash ~/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh"
+	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]}:~/ 
+	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]} "bash ~/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh"
 	sleep 5
-	rm /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
+#	rm /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
 done
 
 
@@ -212,7 +208,7 @@ done
 CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//' | awk '{print$4}')
 
 ## Apply securely, or attempt insecurely if it fails (for any reason)
-ssh -q ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }"
+ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }"
 
 
 ##Final messages for using and destroying the cluster
@@ -225,5 +221,5 @@ echo ""
 
 chmod 755 ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
-echo ""; echo -e "Connect to the Rancher server and/or one of the cluster servers, ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}, to work with this cluster"
+echo ""; echo -e "Connect to the Rancher server and/or one of the cluster servers, ssh -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}, to work with this cluster"
 

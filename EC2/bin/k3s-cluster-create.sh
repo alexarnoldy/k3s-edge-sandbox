@@ -144,13 +144,11 @@ ssh-keygen -q -R ${FIRST_SERVER_PUBLIC_IP} -f ${HOME}/.ssh/known_hosts &> /dev/n
 #until ssh -o StrictHostKeyChecking=no ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} last -x | grep shutdown &> /dev/null; do echo "Waiting for ${FIRST_SERVER_HOSTNAME} to boot up and update its software..." && sleep 30; done
 
 ## Test for sshd to come online after the reboot, then wait ten seconds more for the node to finish booting
-until nc -zv ${FIRST_SERVER_PUBLIC_IP} 22 &> /dev/null; do echo "Waiting until ${FIRST_SERVER_HOSTNAME} finishes rebooting..." && sleep 5; done
+until nc -zv ${FIRST_SERVER_PUBLIC_IP} 22 &> /dev/null; do echo "Waiting until ${FIRST_SERVER_HOSTNAME} finishes booting..." && sleep 5; done
 echo "Waiting for someone who truly gets me..."
 #sleep 10
 
 
-## Remove a previous config file if it exists
-rm -f ${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
 
 ## Test to see if more than one server is specified
 [ ${ALL_SERVERS} -gt 2 ] && CLUSTER="--cluster-init" || CLUSTER=""
@@ -172,23 +170,39 @@ ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "ku
 ## Join the remaining two server nodes to the cluster
 	NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 
-
-for INDEX in 0 1; do 
-cat <<EOF> /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
+for SERVER in $(echo ${ALL_SERVER_PUBLIC_IPS[@]}); do
+#for INDEX in 0 1; do 
+cat <<EOF> /tmp/${SERVER}.sh
+#cat <<EOF> /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
 FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
 NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 K3s_VERSION=${INSTALLED_K3s_VERSION};
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 K3S_TOKEN=${NODE_TOKEN} K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC='server' sh -
 EOF
-	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]}:~/ 
-	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]} "bash ~/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh"
+	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${SERVER}.sh ${SSH_USER}@${SERVER}:~/ 
+#	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]}:~/ 
+	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} "bash ~/${SERVER}.sh"
+#	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]} "bash ~/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh"
 	sleep 5
+#	rm /tmp/${SERVER}.sh
 #	rm /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
 done
 
 
 
 
+for AGENT in $(echo ${ALL_AGENT_PUBLIC_IPS[@]}); do
+cat <<EOF> /tmp/${AGENT}.sh
+FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP}
+NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+K3s_VERSION=${INSTALLED_K3s_VERSION}
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 K3S_TOKEN=${NODE_TOKEN} K3S_KUBECONFIG_MODE="644" sh -
+EOF
+	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${AGENT}.sh ${SSH_USER}@${AGENT}:~/ 
+	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} "bash ~/${AGENT}.sh"
+	sleep 5
+#	rm /tmp/${AGENT}.sh
+done
 
 #### Disabled until I can separate the provisiong of server and agent nodes in ec2
 # Join all agent nodes to the cluster

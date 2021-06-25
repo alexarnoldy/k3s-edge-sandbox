@@ -83,7 +83,7 @@ module "ec2_agent_instances" {
   instance_count = var.num_agents
   ami            = var.instance_ami
   instance_type  = var.agent_instance_type
-#  key_name       = var.ssh_public_key
+  key_name       = var.ssh_public_key
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
 

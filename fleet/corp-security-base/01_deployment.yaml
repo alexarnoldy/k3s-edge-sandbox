@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: corp-sec-base
+
+---
+
+#apiVersion: apps/v1
+#kind: Deployment
+#metadata:
+#  name: jupyter-minimal
+#  namespace: jupyter
+#spec:
+#  replicas: 1
+#  selector:
+#    matchLabels:
+#      app: jupyter-srv
+#  template:
+#    metadata:
+#      labels:
+#        app: jupyter-srv
+#    spec:
+#      containers:
+#      - name: jupyter-minimal
+#        image: jupyter/minimal-notebook
+#        imagePullPolicy: IfNotPresent
+#        ports:
+#        - containerPort: 8888
+#          name: jupyter
+#        command: ["start-notebook.sh"]
+#        args: ["--NotebookApp.token=''"]

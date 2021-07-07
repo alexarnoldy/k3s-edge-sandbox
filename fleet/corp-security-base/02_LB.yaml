@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: jupyter-minimal-service
+  namespace: corp-sec-base
+spec:
+  selector:
+    app: jupyter-srv
+  ports:
+    - name: jupyter
+      port: 8888
+      targetPort: 8888
+  type: LoadBalancer

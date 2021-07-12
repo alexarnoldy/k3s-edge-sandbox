@@ -179,13 +179,11 @@ NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_P
 K3s_VERSION=${INSTALLED_K3s_VERSION};
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 K3S_TOKEN=${NODE_TOKEN} K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC='server' sh -
 EOF
-	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${SERVER}.sh ${SSH_USER}@${SERVER}:~/ 
-#	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]}:~/ 
-	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} "bash ~/${SERVER}.sh"
-#	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${ALL_SERVER_PUBLIC_IPS[INDEX]} "bash ~/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh"
+##	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${SERVER}.sh ${SSH_USER}@${SERVER}:~/ 
+##	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} "bash ~/${SERVER}.sh"
+	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' < /tmp/${SERVER}.sh
 	sleep 5
-#	rm /tmp/${SERVER}.sh
-#	rm /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
+	rm /tmp/${SERVER}.sh
 done
 
 
@@ -198,26 +196,13 @@ NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_P
 K3s_VERSION=${INSTALLED_K3s_VERSION}
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 K3S_TOKEN=${NODE_TOKEN} K3S_KUBECONFIG_MODE="644" sh -
 EOF
-	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${AGENT}.sh ${SSH_USER}@${AGENT}:~/ 
-	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} "bash ~/${AGENT}.sh"
+##	scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no /tmp/${AGENT}.sh ${SSH_USER}@${AGENT}:~/ 
+##	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} "bash ~/${AGENT}.sh"
+	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' < /tmp/${AGENT}.sh
 	sleep 5
-#	rm /tmp/${AGENT}.sh
+	rm /tmp/${AGENT}.sh
 done
 
-#### Disabled until I can separate the provisiong of server and agent nodes in ec2
-# Join all agent nodes to the cluster
-#for INDEX in $(seq 0 2 ${FINAL_AGENT_INDEX}); do 
-#	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} 
-## --k3s-channel doesn't work with k3sup v0.9.6	
-#	k3sup join --ip ${ALL_AGENTS[INDEX]} --server-ip ${FIRST_SERVER_IP} --sudo --user ${SSH_USER} --k3s-channel stable
-#	sleep 5
-#done
-
-
-
-## Extract and apply the string to deploy the cattle-agent and fleet-agent
-#export KUBECONFIG=${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
-#kubectl config use-context k3s-${EDGE_LOCATION}
 
 CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//' | awk '{print$4}')
 

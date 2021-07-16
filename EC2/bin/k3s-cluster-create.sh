@@ -27,7 +27,8 @@ NC='\033[0m' # No Color
 EDGE_LOCATION=$1
 SSH_USER="ec2-user"
 CONFIG_FILE="./k3s_edge_locations.conf"
-INSTALLED_K3s_VERSION="v1.20.4+k3s1"
+#INSTALLED_K3s_VERSION="v1.20.4+k3s1"
+K3s_VERSION=$(awk -F= '/K3s_VERSION/ {print$2}' k3s_edge_locations.conf)
 
 
 ## Test for at least one argument provided with the command
@@ -154,9 +155,24 @@ echo "Waiting for someone who truly gets me..."
 [ ${ALL_SERVERS} -gt 2 ] && CLUSTER="--cluster-init" || CLUSTER=""
 
 ## Install first server node
-K3s_VERSION="v1.20.4+k3s1" 
+#K3s_VERSION="v1.20.4+k3s1" 
+#echo "K3s_VERSION="v1.20.4+k3s1" "
+echo "K3s_VERSION=$(echo ${K3s_VERSION})"
+#K3s_VERSION="$(echo ${K3s_VERSION})"
+#cat <<EOF> /tmp/first_server.sh
+#curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+#INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
+#--kube-apiserver-arg cloud-provider=external \
+#--kube-apiserver-arg allow-privileged=true \
+#--kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
+#--kube-controller-arg cloud-provider=external \
+#--kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
+#--disable-cloud-controller' sh -s -
+#EOF
+
+#ssh -q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' < /tmp/first_server.sh
 ssh -q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' \
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
 --kube-apiserver-arg cloud-provider=external \
 --kube-apiserver-arg allow-privileged=true \
@@ -165,6 +181,8 @@ INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
 --kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
 --disable-cloud-controller' sh -s -
 EOF
+
+#rm /tmp/first_server.sh
 
 #"K3s_VERSION="v1.20.4+k3s1"; ssh q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "K3s_VERSION="v1.20.4+k3s1" ; curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644' sh -s -"
 
@@ -210,23 +228,35 @@ scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} /tmp/ebs-csi.yaml /tmp/ebs-sc.yaml ${SSH_
 
 ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cp /tmp/ebs*yaml /var/lib/rancher/k3s/server/manifests
 
-## Join the remaining two server nodes to the cluster
+## Join the remaining two server nodes, if applicable, to the cluster
 	NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 
 for SERVER in $(echo ${ALL_SERVER_PUBLIC_IPS[@]}); do
 #for INDEX in 0 1; do 
-cat <<EOF> /tmp/${SERVER}.sh
-#cat <<EOF> /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
+#cat <<EOF> /tmp/${SERVER}.sh
+##cat <<EOF> /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
+#FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
+#NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+#K3s_VERSION=${K3s_VERSION};
+##K3s_VERSION=${INSTALLED_K3s_VERSION};
+#curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+#K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
+#K3S_TOKEN=${NODE_TOKEN} \
+#K3S_KUBECONFIG_MODE="644" \
+#INSTALL_K3S_EXEC='server' sh -
+#EOF
+	#ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' < /tmp/${SERVER}.sh
+	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' << EOF
 FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
 NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
-K3s_VERSION=${INSTALLED_K3s_VERSION};
+K3s_VERSION=${K3s_VERSION};
+#K3s_VERSION=${INSTALLED_K3s_VERSION};
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
 K3S_TOKEN=${NODE_TOKEN} \
 K3S_KUBECONFIG_MODE="644" \
 INSTALL_K3S_EXEC='server' sh -
 EOF
-	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' < /tmp/${SERVER}.sh
 	sleep 5
 	rm /tmp/${SERVER}.sh
 done
@@ -235,16 +265,27 @@ done
 
 
 for AGENT in $(echo ${ALL_AGENT_PUBLIC_IPS[@]}); do
-cat <<EOF> /tmp/${AGENT}.sh
+#cat <<EOF> /tmp/${AGENT}.sh
+#FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP}
+#NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+##K3s_VERSION=${INSTALLED_K3s_VERSION}
+#K3s_VERSION=${K3s_VERSION}
+#curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+#K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
+#K3S_TOKEN=${NODE_TOKEN} \
+#K3S_KUBECONFIG_MODE="644" sh -
+#EOF
+	#ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' < /tmp/${AGENT}.sh
+	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' << EOF
 FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP}
 NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
-K3s_VERSION=${INSTALLED_K3s_VERSION}
+#K3s_VERSION=${INSTALLED_K3s_VERSION}
+K3s_VERSION=${K3s_VERSION}
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
 K3S_TOKEN=${NODE_TOKEN} \
 K3S_KUBECONFIG_MODE="644" sh -
 EOF
-	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' < /tmp/${AGENT}.sh
 	sleep 5
 	rm /tmp/${AGENT}.sh
 done

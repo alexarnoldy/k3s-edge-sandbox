@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash  
 
 ## Script to run Terraform to create an openSUSE JeOS cluster on the local system 
 ## then run K3sup to create a K3s cluster on it, and finally import the cluster 
@@ -179,12 +179,29 @@ INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
 --kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
 --kube-controller-arg cloud-provider=external \
 --kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
---disable-cloud-controller' sh -s -
+--disable-cloud-controller' \
+sh -s -
 EOF
+#ssh -q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
+#curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+#INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
+##--kube-apiserver-arg cloud-provider=external \
+#--kube-apiserver-arg allow-privileged=true \
+#--kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
+##--kube-controller-arg cloud-provider=external \
+#--kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
+##--kubelet-arg="cloud-provider=external" \
+#--kubelet-arg="provider-id=aws:///$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" \
+#--disable local-storage
+##--disable-cloud-controller' \
+#sh -s -
+#EOF
 
 #rm /tmp/first_server.sh
 
+
 #"K3s_VERSION="v1.20.4+k3s1"; ssh q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "K3s_VERSION="v1.20.4+k3s1" ; curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644' sh -s -"
+
 
 ## Enable to download the kubeconfig file for this cluster
 #scp ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}:/etc/rancher/k3s/k3s.yaml ${HOME}/.kube/kubeconfig-${EDGE_LOCATION}
@@ -197,36 +214,45 @@ ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "un
 sleep 5
 ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns"
 
+## Remove the default flag from the local-path StorageClass
+ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' <<EOF
+kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+EOF
+
 ## Create and move into place the HelmChart object for AWS EBS CSI driver resource
-cat <<EOF> /tmp/ebs-csi.yaml
+cat <<EOF> /tmp/aws-ebs-csi-driver.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
   name: aws-ebs-csi-driver
   namespace: kube-system
 spec:
-  chart: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases/download/v0.4.0/helm-chart.tgz
-  set:
-    enableVolumeScheduling: "true"
-    enableVolumeResizing: "true"
-    enableVolumeSnapshot: "true"
+  chart: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases/download/helm-chart-aws-ebs-csi-driver-2.0.0/aws-ebs-csi-driver-2.0.0.tgz
+  version: v2.0.0
+  targetNamespace: kube-system
   valuesContent: |-
-    nodeSelector:
-      "node-role.kubernetes.io/master": "true"
+    enableVolumeScheduling: true
+    enableVolumeResizing: true
+    enableVolumeSnapshot: true
+    extraVolumeTags:
+      Name: k3s-ebs
+      anothertag: anothervalue
 EOF
 
-cat <<EOF> /tmp/ebs-sc.yaml
+cat <<EOF> /tmp/aws-ebs-sc.yaml
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: ebs-sc
+  name: ebs-storageclass
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
 provisioner: ebs.csi.aws.com
 volumeBindingMode: WaitForFirstConsumer
 EOF
 
-scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} /tmp/ebs-csi.yaml /tmp/ebs-sc.yaml ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}:/tmp/
+scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} /tmp/aws-ebs-csi-driver.yaml /tmp/aws-ebs-sc.yaml ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}:/tmp/
 
-ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cp /tmp/ebs*yaml /var/lib/rancher/k3s/server/manifests
+ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cp /tmp/aws-ebs*yaml /var/lib/rancher/k3s/server/manifests
 
 ## Join the remaining two server nodes, if applicable, to the cluster
 	NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
@@ -250,15 +276,25 @@ for SERVER in $(echo ${ALL_SERVER_PUBLIC_IPS[@]}); do
 FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
 NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 K3s_VERSION=${K3s_VERSION};
-#K3s_VERSION=${INSTALLED_K3s_VERSION};
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
 K3S_TOKEN=${NODE_TOKEN} \
-K3S_KUBECONFIG_MODE="644" \
-INSTALL_K3S_EXEC='server' sh -
+INSTALL_K3S_EXEC='server --write-kubeconfig-mode=644 \
+--kube-apiserver-arg cloud-provider=external \
+--kube-apiserver-arg allow-privileged=true \
+--kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
+--kube-controller-arg cloud-provider=external \
+--kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
+--disable-cloud-controller' \
+sh -s -
 EOF
-	sleep 5
-	rm /tmp/${SERVER}.sh
+#curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+#K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
+#K3S_TOKEN=${NODE_TOKEN} \
+#K3S_KUBECONFIG_MODE="644" \
+#INSTALL_K3S_EXEC='server' sh -
+#	sleep 5
+#	rm /tmp/${SERVER}.sh
 done
 
 

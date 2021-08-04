@@ -27,7 +27,9 @@ module "vpc" {
 
   enable_nat_gateway = var.vpc_enable_nat_gateway
 
-  tags = var.vpc_tags
+  tags = {
+    KubernetesCluster   = var.edge_location
+  }
 }
 
 module "ec2_first_server_instance" {
@@ -43,6 +45,7 @@ module "ec2_first_server_instance" {
 #  user_data = data.template_file.user_data.rendered
 
   tags = {
+    KubernetesCluster   = var.edge_location
     Terraform   = "true"
     first_server   = "true"
   }
@@ -69,6 +72,7 @@ module "ec2_server_instances" {
   subnet_id              = module.vpc.public_subnets[0]
 
   tags = {
+    KubernetesCluster   = var.edge_location
     Terraform   = "true"
     Environment = "dev"
   }
@@ -88,6 +92,7 @@ module "ec2_agent_instances" {
   subnet_id              = module.vpc.public_subnets[0]
 
   tags = {
+    KubernetesCluster   = var.edge_location
     Terraform   = "true"
     Environment = "dev"
   }

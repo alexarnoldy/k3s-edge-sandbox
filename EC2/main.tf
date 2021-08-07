@@ -8,17 +8,18 @@ terraform {
       #      version = "1.14.0"
     }
     aws = {
-      region = "us-west-1"
+#      region = "us-west-2"
     }
   }
 }
 
+
+
+#### Comment out the section below if a Rancher server is not available ####
 provider "rancher2" {
   alias = "rancher-demo"
 }
 
-
-#### Comment out the section below if a Rancher server is not available ####
 resource "rancher2_cluster" "k3s-cluster-instance" {
   provider    = rancher2.rancher-demo
   name        = "k3s-${var.edge_location}"
@@ -57,7 +58,7 @@ module "ec2_first_server_instance" {
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "2.12.0"
 
-  name           = "${var.edge_location}-server"
+  name           = "${var.edge_location}-first-server"
   ami            = var.instance_ami
   instance_type  = var.server_instance_type
   key_name       = var.ssh_public_key
@@ -170,7 +171,7 @@ resource "aws_security_group" "K3s_outside_sg" {
 }
 
 resource "aws_iam_role" "k3s_ebs_role" {
-  name = "k3s_ebs_role"
+  name = "${var.edge_location}-k3s_ebs_role"
 
   assume_role_policy = jsonencode({
   "Version": "2012-10-17",
@@ -194,12 +195,12 @@ resource "aws_iam_role" "k3s_ebs_role" {
 
 
 resource "aws_iam_instance_profile" "k3s_ebs_profile" {
-  name = "k3s_ebs_profile"
+  name = "${var.edge_location}-k3s_ebs_profile"
   role = aws_iam_role.k3s_ebs_role.name
 }
 
 resource "aws_iam_role_policy" "k3s_ebs_role_policy" {
-  name = "k3s_ebs_role_policy"
+  name = "${var.edge_location}-k3s_ebs_role_policy"
   role = aws_iam_role.k3s_ebs_role.id
 
   policy = jsonencode({

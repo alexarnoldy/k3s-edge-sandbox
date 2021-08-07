@@ -29,6 +29,7 @@ SSH_USER="ec2-user"
 CONFIG_FILE="./k3s_edge_locations.conf"
 #INSTALLED_K3s_VERSION="v1.20.4+k3s1"
 K3s_VERSION=$(awk -F= '/K3s_VERSION/ {print$2}' k3s_edge_locations.conf)
+export AWS_DEFAULT_REGION=$(awk -F= '/AWS_REGION/ {print$2}' k3s_edge_locations.conf)
 
 
 ## Test for at least one argument provided with the command
@@ -110,6 +111,7 @@ server_instance_type = "${SERVER_INSTANCE_TYPE}"
 num_agents = ${NUM_AGENTS}
 agent_instance_type = "${AGENT_INSTANCE_TYPE}"
 edge_location = "${EDGE_LOCATION}"
+vpc_azs = [ "${AWS_DEFAULT_REGION}-1a", "${AWS_DEFAULT_REGION}-1b" ]
 vpc_cidr = "${VPC_CIDR}"
 vpc_public_subnets = [${VPC_PUBLIC_SUBNETS}]
 cluster_labels = {${CLUSTER_LABELS}}
@@ -337,6 +339,8 @@ ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "ku
 
 ##Final messages for using and destroying the cluster
 echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
+
+echo "sleep 5; rm ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate*" >> ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
 echo -e "######################## ${RED}TO DESTROY THIS CLUSTER, USE THE COMMAND:${LCYAN} ./bin/destroy_${EDGE_LOCATION}_edge_location.sh${NC} "
 #echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; source ~/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"

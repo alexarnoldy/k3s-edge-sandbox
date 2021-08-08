@@ -111,7 +111,7 @@ server_instance_type = "${SERVER_INSTANCE_TYPE}"
 num_agents = ${NUM_AGENTS}
 agent_instance_type = "${AGENT_INSTANCE_TYPE}"
 edge_location = "${EDGE_LOCATION}"
-vpc_azs = [ "${AWS_DEFAULT_REGION}-1a", "${AWS_DEFAULT_REGION}-1b" ]
+vpc_azs = [ "${AWS_DEFAULT_REGION}a", "${AWS_DEFAULT_REGION}b" ]
 vpc_cidr = "${VPC_CIDR}"
 vpc_public_subnets = [${VPC_PUBLIC_SUBNETS}]
 cluster_labels = {${CLUSTER_LABELS}}
@@ -133,6 +133,14 @@ FIRST_SERVER_PRIVATE_IP=$(terraform output -json -state=state/${EDGE_LOCATION}/$
 SSH_KEY_NAME=$(terraform output -json -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ssh_key_name  | awk -F\" '{print$2}')
 
 mkdir -p ~/.kube/
+
+## Test permissions on SSH key file
+if [ $(stat -c %a ${HOME}/.ssh/${SSH_KEY_NAME}) != 400 ] 
+then
+	echo "Permissions for ${HOME}/.ssh/${SSH_KEY_NAME} are too open"
+	echo "Change permssions to 400 (-r--------) and try again"
+	exit
+fi
 
 ## NOTE: Quick way to install first server from the command line:
 # K3s_VERSION="v1.20.4+k3s1"; ssh ec2-user@54.153.109.143 sh -c "K3s_VERSION="v1.20.4+k3s1" ; curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' INSTALL_K3S_EXEC='server --cluster-init --write-kubeconfig-mode=644' sh -s -"
@@ -323,7 +331,6 @@ K3S_TOKEN=${NODE_TOKEN} \
 K3S_KUBECONFIG_MODE="644" sh -
 EOF
 	sleep 5
-	rm /tmp/${AGENT}.sh
 done
 
 ## Remove the default flag from the local-path StorageClass
@@ -340,7 +347,7 @@ ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "ku
 ##Final messages for using and destroying the cluster
 echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
-echo "sleep 5; rm ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate*" >> ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
+#echo "sleep 5; rm ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate*" >> ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
 echo -e "######################## ${RED}TO DESTROY THIS CLUSTER, USE THE COMMAND:${LCYAN} ./bin/destroy_${EDGE_LOCATION}_edge_location.sh${NC} "
 #echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; source ~/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"

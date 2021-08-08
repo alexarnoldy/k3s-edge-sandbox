@@ -36,6 +36,16 @@ data "rancher2_cluster" "k3s-cluster" {
 #### Comment out the section above if a Rancher server is not available ####
 
 
+data "aws_ami" "sles15sp2" {
+  owners = ["amazon"]
+  most_recent      = true
+
+  filter {
+    name   = "name"
+    values = ["suse-sles-15-sp2*hvm-ssd-x86_64"]
+  }
+}
+
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "2.21.0"
@@ -59,7 +69,8 @@ module "ec2_first_server_instance" {
   version = "2.12.0"
 
   name           = "${var.edge_location}-first-server"
-  ami            = var.instance_ami
+#  ami            = var.instance_ami
+  ami            = data.aws_ami.sles15sp2.id
   instance_type  = var.server_instance_type
   key_name       = var.ssh_public_key
   iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
@@ -80,7 +91,8 @@ module "ec2_server_instances" {
 
   name           = "${var.edge_location}-server"
   instance_count = (var.num_servers - 1)
-  ami            = var.instance_ami
+#  ami            = var.instance_ami
+  ami            = data.aws_ami.sles15sp2.id
   instance_type  = var.server_instance_type
   key_name       = var.ssh_public_key
   iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
@@ -101,8 +113,9 @@ module "ec2_agent_instances" {
 
   name           = "${var.edge_location}-agent"
   instance_count = var.num_agents
-  ami            = var.instance_ami
+#  ami            = var.instance_ami
   instance_type  = var.agent_instance_type
+  ami            = data.aws_ami.sles15sp2.id
   key_name       = var.ssh_public_key
   iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]

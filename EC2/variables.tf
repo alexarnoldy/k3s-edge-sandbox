@@ -4,7 +4,7 @@
 variable "ssh_public_key" {
   description = "Key to connect to the instance"
   type        = string
-  default     = "oregon-ec2-key-pair"
+#  default     = "oregon-ec2-key-pair"
 }
 
 variable "vpc_name" {

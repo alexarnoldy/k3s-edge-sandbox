@@ -25,11 +25,12 @@ RED='\033[0;31m'
 LCYAN='\033[1;36m'
 NC='\033[0m' # No Color
 EDGE_LOCATION=$1
-SSH_USER="ec2-user"
 CONFIG_FILE="./k3s_edge_locations.conf"
+SSH_USER="ec2-user"
+AWS_SSH_KEY=$(awk -F= '/^AWS_SSH_KEY/ {print$2}' ${CONFIG_FILE})
 #INSTALLED_K3s_VERSION="v1.20.4+k3s1"
-K3s_VERSION=$(awk -F= '/K3s_VERSION/ {print$2}' k3s_edge_locations.conf)
-export AWS_DEFAULT_REGION=$(awk -F= '/AWS_REGION/ {print$2}' k3s_edge_locations.conf)
+K3s_VERSION=$(awk -F= '/^K3s_VERSION/ {print$2}' ${CONFIG_FILE})
+export AWS_DEFAULT_REGION=$(awk -F= '/^AWS_REGION/ {print$2}' ${CONFIG_FILE})
 
 
 ## Test for at least one argument provided with the command
@@ -114,6 +115,7 @@ edge_location = "${EDGE_LOCATION}"
 vpc_azs = [ "${AWS_DEFAULT_REGION}a", "${AWS_DEFAULT_REGION}b" ]
 vpc_cidr = "${VPC_CIDR}"
 vpc_public_subnets = [${VPC_PUBLIC_SUBNETS}]
+ssh_public_key = "${AWS_SSH_KEY}"
 cluster_labels = {${CLUSTER_LABELS}}
 EOF
 

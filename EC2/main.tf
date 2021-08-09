@@ -207,6 +207,7 @@ resource "aws_iam_role" "k3s_ebs_role" {
 }
 
 
+## NOTE: To delete an orphaned instance profile: aws iam delete-instance-profile --instance-profile-name <name>
 resource "aws_iam_instance_profile" "k3s_ebs_profile" {
   name = "${var.edge_location}-k3s_ebs_profile"
   role = aws_iam_role.k3s_ebs_role.name

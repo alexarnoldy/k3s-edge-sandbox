@@ -1,7 +1,7 @@
 #!/bin/bash  
 
 ## Script to run Terraform to create an openSUSE JeOS cluster on the local system 
-## then run K3sup to create a K3s cluster on it, and finally import the cluster 
+## then create a K3s cluster on it, and finally import the cluster 
 ## into a Rancher server instance.
 
 ## 02/17/2021 - alex.arnoldy@suse.com
@@ -9,9 +9,10 @@
 ################################################################################################
 ##  IMPORTANT:	This script defines simulated edge locations in the k3s_edge_locations.conf file
 ##		for subnet, server & agent specs and cluster labels.
+## 		The script must be run from its parent directory, i.e. ./bin/k3s-cluster-create.sh
 ################################################################################################
-##		    Using this script to deploy HA server nodes requires a load balancer 
-## SUPER IMPORTANT: for the Kubernetes API server, port 6443
+## SUPER IMPORTANT: Using this script to deploy truly HA server nodes 
+##  		    requires a load balancer for the Kubernetes API server, port 6443
 ################################################################################################
 
 ## The Rancher server is identified in the rancher2.tf file
@@ -27,7 +28,7 @@ NC='\033[0m' # No Color
 EDGE_LOCATION=$1
 CONFIG_FILE="./k3s_edge_locations.conf"
 SSH_USER="ec2-user"
-AWS_SSH_KEY=$(awk -F= '/^AWS_SSH_KEY/ {print$2}' ${CONFIG_FILE})
+# AWS_SSH_KEY=$(awk -F= '/^AWS_SSH_KEY/ {print$2}' ${CONFIG_FILE})
 #INSTALLED_K3s_VERSION="v1.20.4+k3s1"
 K3s_VERSION=$(awk -F= '/^K3s_VERSION/ {print$2}' ${CONFIG_FILE})
 export AWS_DEFAULT_REGION=$(awk -F= '/^AWS_REGION/ {print$2}' ${CONFIG_FILE})
@@ -52,12 +53,20 @@ done
 ## Set EDITOR to vi, if not set
 #[ -z "$EDITOR" ] && export EDITOR=vi
 
+## Generate a new SSH key for this cluster. This seems like
+## the easiest and most secure option that allows for
+## easily switching between AWS regions.
+mkdir -p state/${EDGE_LOCATION}/
+ssh-keygen -q -t rsa -N '' -f state/${EDGE_LOCATION}/id_rsa
+
+AWS_SSH_KEY=$(cat state/${EDGE_LOCATION}/id_rsa.pub)
+
 
 ## Gather the configuration out of the config file:
 ## Note that the array is populated with specific info in each element
 ## Review the config file before applying the config or bad things might happen
 ## Example: 
-## 10.0.11.0./24 site-1 3/t2.small 0/t2.small status=standby
+## 10.0.11.0./24   site-1   3/t2.small   0/t2.small   status=standby
 EDGE_LOCATION_CONFIG=($(grep ${EDGE_LOCATION} ${CONFIG_FILE} | head -1))
 
 #### Changing the format of the config file for AWS changed how the data has to be parsed. Now ALL_SERVERS=NUM_SERVERS and ALL_AGENTS=NUM_AGENTS
@@ -105,7 +114,6 @@ CLUSTER_LABELS=$(echo ${EDGE_LOCATION_CONFIG[4]})
 
 
 ## Create a custom tfvars file for this deployment
-mkdir -p state/${EDGE_LOCATION}/
 cat <<EOF> state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfvars
 num_servers = ${NUM_SERVERS}
 server_instance_type = "${SERVER_INSTANCE_TYPE}"
@@ -132,17 +140,17 @@ ALL_AGENT_PUBLIC_IPS=($(terraform output -state=state/${EDGE_LOCATION}/${EDGE_LO
 #echo ${ALL_SERVER_PRIVATE_IPS[@]}
 FIRST_SERVER_PRIVATE_IP=$(terraform output -json -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ec2_first_server_instance_private_ip | awk -F\" '{print$2}')
 
-SSH_KEY_NAME=$(terraform output -json -state=state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate ssh_key_name  | awk -F\" '{print$2}')
+CLUSTER_SSH_KEY=state/${EDGE_LOCATION}/id_rsa
 
 mkdir -p ~/.kube/
 
 ## Test permissions on SSH key file
-if [ $(stat -c %a ${HOME}/.ssh/${SSH_KEY_NAME}) != 400 ] 
-then
-	echo "Permissions for ${HOME}/.ssh/${SSH_KEY_NAME} are too open"
-	echo "Change permssions to 400 (-r--------) and try again"
-	exit
-fi
+#if [ $(stat -c %a ${CLUSTER_SSH_KEY}) != 400 ] 
+#then
+#	echo "Permissions for ${CLUSTER_SSH_KEY} are too open"
+#	echo "Change permssions to 400 (-r--------) and try again"
+#	exit
+#fi
 
 ## NOTE: Quick way to install first server from the command line:
 # K3s_VERSION="v1.20.4+k3s1"; ssh ec2-user@54.153.109.143 sh -c "K3s_VERSION="v1.20.4+k3s1" ; curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' INSTALL_K3S_EXEC='server --cluster-init --write-kubeconfig-mode=644' sh -s -"
@@ -182,8 +190,8 @@ echo "K3s_VERSION=$(echo ${K3s_VERSION})"
 #--disable-cloud-controller' sh -s -
 #EOF
 
-#ssh -q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' < /tmp/first_server.sh
-ssh -q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
+#ssh -q -oStrictHostKeyChecking=no -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' < /tmp/first_server.sh
+ssh -q -oStrictHostKeyChecking=no -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
 --kube-apiserver-arg cloud-provider=external \
@@ -194,7 +202,7 @@ INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
 --disable-cloud-controller' \
 sh -s -
 EOF
-#ssh -q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
+#ssh -q -oStrictHostKeyChecking=no -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
 #curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 #INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
 ##--kube-apiserver-arg cloud-provider=external \
@@ -212,7 +220,7 @@ EOF
 #rm /tmp/first_server.sh
 
 
-#"K3s_VERSION="v1.20.4+k3s1"; ssh q -oStrictHostKeyChecking=no -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "K3s_VERSION="v1.20.4+k3s1" ; curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644' sh -s -"
+#"K3s_VERSION="v1.20.4+k3s1"; ssh q -oStrictHostKeyChecking=no -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "K3s_VERSION="v1.20.4+k3s1" ; curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${K3s_VERSION}' INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644' sh -s -"
 
 
 ## Enable to download the kubeconfig file for this cluster
@@ -222,10 +230,10 @@ EOF
 
 
 ## Wait until the K3s server node is ready before joining the rest of the nodes
-ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "until kubectl get deployment -n kube-system coredns &> /dev/null; do echo "Waiting for the Kubernetes API server to respond..." && sleep 10; done"
+ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "until kubectl get deployment -n kube-system coredns &> /dev/null; do echo "Waiting for the Kubernetes API server to respond..." && sleep 10; done"
 sleep 5
-#ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns"
-ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=ready --timeout=600s pod -l k8s-app=kube-dns"
+#ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=available --timeout=600s deployment/coredns"
+ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=ready --timeout=600s pod -l k8s-app=kube-dns"
 
 
 ## Create and move into place the HelmChart object for AWS EBS CSI driver resource
@@ -259,20 +267,20 @@ provisioner: ebs.csi.aws.com
 volumeBindingMode: WaitForFirstConsumer
 EOF
 
-scp -q -i ${HOME}/.ssh/${SSH_KEY_NAME} /tmp/aws-ebs-csi-driver.yaml /tmp/aws-ebs-sc.yaml ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}:/tmp/
+scp -q -i ${CLUSTER_SSH_KEY} /tmp/aws-ebs-csi-driver.yaml /tmp/aws-ebs-sc.yaml ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}:/tmp/
 
-ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cp /tmp/aws-ebs*yaml /var/lib/rancher/k3s/server/manifests
+ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cp /tmp/aws-ebs*yaml /var/lib/rancher/k3s/server/manifests
 
 
 ## Join the remaining two server nodes, if applicable, to the cluster
-	NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+	NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 
 for SERVER in $(echo ${ALL_SERVER_PUBLIC_IPS[@]}); do
 #for INDEX in 0 1; do 
 #cat <<EOF> /tmp/${SERVER}.sh
 ##cat <<EOF> /tmp/${ALL_SERVER_PUBLIC_IPS[INDEX]}.sh
 #FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
-#NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+#NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 #K3s_VERSION=${K3s_VERSION};
 ##K3s_VERSION=${INSTALLED_K3s_VERSION};
 #curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
@@ -281,10 +289,10 @@ for SERVER in $(echo ${ALL_SERVER_PUBLIC_IPS[@]}); do
 #K3S_KUBECONFIG_MODE="644" \
 #INSTALL_K3S_EXEC='server' sh -
 #EOF
-	#ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' < /tmp/${SERVER}.sh
-	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' << EOF
+	#ssh -q -i ${CLUSTER_SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' < /tmp/${SERVER}.sh
+	ssh -q -i ${CLUSTER_SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' << EOF
 FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
-NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 K3s_VERSION=${K3s_VERSION};
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
@@ -313,7 +321,7 @@ done
 for AGENT in $(echo ${ALL_AGENT_PUBLIC_IPS[@]}); do
 #cat <<EOF> /tmp/${AGENT}.sh
 #FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP}
-#NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+#NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 ##K3s_VERSION=${INSTALLED_K3s_VERSION}
 #K3s_VERSION=${K3s_VERSION}
 #curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
@@ -321,10 +329,10 @@ for AGENT in $(echo ${ALL_AGENT_PUBLIC_IPS[@]}); do
 #K3S_TOKEN=${NODE_TOKEN} \
 #K3S_KUBECONFIG_MODE="644" sh -
 #EOF
-	#ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' < /tmp/${AGENT}.sh
-	ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' << EOF
+	#ssh -q -i ${CLUSTER_SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' < /tmp/${AGENT}.sh
+	ssh -q -i ${CLUSTER_SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' << EOF
 FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP}
-NODE_TOKEN=$(ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 #K3s_VERSION=${INSTALLED_K3s_VERSION}
 K3s_VERSION=${K3s_VERSION}
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
@@ -336,20 +344,20 @@ EOF
 done
 
 ## Remove the default flag from the local-path StorageClass
-ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' <<EOF
+ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' <<EOF
 kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 EOF
 
 CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//' | awk '{print$4}')
 
 ## Apply securely, or attempt insecurely if it fails (for any reason)
-ssh -q -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }"
+ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }"
 
 
 ##Final messages for using and destroying the cluster
 echo "export EDGE_LOCATION=${EDGE_LOCATION}; source ${HOME}/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars" > ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
-#echo "sleep 5; rm ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate*" >> ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
+echo "sleep 10; rm -r state/${EDGE_LOCATION}" >> ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
 echo -e "######################## ${RED}TO DESTROY THIS CLUSTER, USE THE COMMAND:${LCYAN} ./bin/destroy_${EDGE_LOCATION}_edge_location.sh${NC} "
 #echo -e "## ${LCYAN}export EDGE_LOCATION=${EDGE_LOCATION}; source ~/.rancher_tokens; terraform destroy -auto-approve --state=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfstate -var-file=terraform.tfvars -var-file=state/\${EDGE_LOCATION}/\${EDGE_LOCATION}.tfvars${NC}"
@@ -358,5 +366,5 @@ echo ""
 
 chmod 755 ./bin/destroy_${EDGE_LOCATION}_edge_location.sh
 
-echo ""; echo -e "Connect to the Rancher server and/or one of the cluster servers, ssh -i ${HOME}/.ssh/${SSH_KEY_NAME} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}, to work with this cluster"
+echo ""; echo -e "Connect to the Rancher server and/or one of the cluster servers, ssh -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}, to work with this cluster"
 

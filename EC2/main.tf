@@ -64,6 +64,13 @@ module "vpc" {
   }
 }
 
+
+resource "aws_key_pair" "ssh-key-pair" {
+  key_name   = "${var.edge_location}-key-pair"
+  public_key = var.ssh_public_key
+}
+
+
 module "ec2_first_server_instance" {
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "2.12.0"
@@ -72,7 +79,8 @@ module "ec2_first_server_instance" {
 #  ami            = var.instance_ami
   ami            = data.aws_ami.sles15sp2.id
   instance_type  = var.server_instance_type
-  key_name       = var.ssh_public_key
+#  key_name       = var.ssh_public_key
+  key_name       = aws_key_pair.ssh-key-pair.key_name
   iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
@@ -94,7 +102,8 @@ module "ec2_server_instances" {
 #  ami            = var.instance_ami
   ami            = data.aws_ami.sles15sp2.id
   instance_type  = var.server_instance_type
-  key_name       = var.ssh_public_key
+#  key_name       = var.ssh_public_key
+  key_name       = aws_key_pair.ssh-key-pair.key_name
   iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
@@ -116,7 +125,8 @@ module "ec2_agent_instances" {
 #  ami            = var.instance_ami
   instance_type  = var.agent_instance_type
   ami            = data.aws_ami.sles15sp2.id
-  key_name       = var.ssh_public_key
+#  key_name       = var.ssh_public_key
+  key_name       = aws_key_pair.ssh-key-pair.key_name
   iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]

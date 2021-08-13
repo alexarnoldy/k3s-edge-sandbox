@@ -1,8 +1,0 @@
-This module allows locking down SSH access from a subnet or single IP address.
-
-Before running terraform apply, run these commands to allow SSH access from only this system to the created resources:
-
-myip="$(dig +short myip.opendns.com @resolver1.opendns.com)"
-export TF_VAR_my_public_ip=\'[\"${myip}/32\"]\'
-export $(env | grep TF_VAR_my_public_ip)
-

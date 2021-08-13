@@ -6,7 +6,7 @@ IMPORTANT: This doesn't seem to work on hosts that currently have virtual bridge
 
 The number of clusters plus the number and roles of the cluster nodes is managed through the KVM host's /etc/hosts file (see examples below). 
 
-Deploying this project will (hopefully) requore no previous Terraform experience. 
+Deploying this project will (hopefully) require little previous Terraform experience. 
 
 It's based on openSUSE 15.2, which is compatible with SLES 15 SP2, so this could potentially be used for prototyping edge deployments for production workloads.
 

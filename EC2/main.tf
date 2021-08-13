@@ -18,6 +18,10 @@ terraform {
 #### Comment out the section below if a Rancher server is not available ####
 provider "rancher2" {
   alias = "rancher-demo"
+####
+# Uncomment the "insecure = true" line if using self-signed certs and not providing them to Terraform
+####
+#  insecure = true
 }
 
 resource "rancher2_cluster" "k3s-cluster-instance" {

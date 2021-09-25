@@ -1,0 +1,7 @@
+#### Terraform and bash scripts to deploy semi-isolated K3s clusters on KVM hosts or in AWS EC2
+
+.The two methods are still quite different. See each README for instructions on how to implement.
+
+.Hoping to bridge the gap as much as it possible for a more consistent experience.
+
+.The fleet directory is transient and will likely be removed soon.

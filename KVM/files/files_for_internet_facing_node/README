@@ -1,4 +1,10 @@
-Set the the variables, then use ssh to run the scripts on each node.
+* Create a VM in EC2 with an EIP and a FQDN in Route 53
+* Set ssh port to 2244 and `GatewayPorts clientspecified` in /etc/ssh/sshd_config 
+** Restart networking
+* Need to populate the EC2 SSH key file on this host before running the scripts from here
+* I.e. export EC2_SSH_KEY_LOCATION=/home/sles/k3s-edge-sandbox/state/site-1/site-1.id_rsa
+
+* Set these variables, then use ssh to run the scripts on each node.
 
 export FRONT_URL= 
 export SERVICE_NAME= 
@@ -8,9 +14,7 @@ export SSH_USER=
 export FRONT_END_IP= 
 export APP_SERVER_IP= 
 export RANCHER_BOOTSTRAP_PW= 
-## Need to populate the EC2 SSH key file before referencing it here
-## I.e. export EC2_SSH_LOCATION=/home/sles/k3s-edge-sandbox/state/site-1/site-1.id_rsa
-export EC2_SSH_LOCATION=
+export EC2_SSH_KEY_LOCATION=
 
 ssh ${SSH_USER}@${BACK_END_IP} 'bash -s' << EOF
 echo "[Unit]
@@ -23,7 +27,7 @@ WantedBy=multi-user.target" > /tmp/${SERVICE_NAME}-tunnel.service
 EOF
 
 ssh ${SSH_USER}@${BACK_END_IP} mkdir -p ~/.ssh
-scp ${EC2_SSH_LOCATION} ${SSH_USER}@${BACK_END_IP}:/home/${SSH_USER}/.ssh/${EC2_SSH_KEY_NAME}
+scp ${EC2_SSH_KEY_LOCATION} ${SSH_USER}@${BACK_END_IP}:/home/${SSH_USER}/.ssh/${EC2_SSH_KEY_NAME}
 ssh ${SSH_USER}@${BACK_END_IP} chmod 400
 ## Need to ssh from the back end server to the EC2 instance to remove the script in the root authorized_hosts as well as accept the EC2 key, again ssh'ing as the root user to the EC2 root user
 

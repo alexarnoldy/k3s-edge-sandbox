@@ -46,7 +46,8 @@ data "aws_ami" "sles15sp2" {
 
   filter {
     name   = "name"
-    values = ["suse-sles-15-sp2*hvm-ssd-x86_64"]
+    values = ["suse-sles-15-sp3-v20210622-hvm-ssd-x86_64"]
+#    values = ["suse-sles-15-sp2*hvm-ssd-x86_64"]
   }
 }
 

@@ -1,6 +1,6 @@
 * Create a VM in EC2 with an EIP and a FQDN in Route 53
 * Set ssh port to 2244 and `GatewayPorts clientspecified` in /etc/ssh/sshd_config 
-** Restart networking
+** Restart sshd.service
 * Need to populate the EC2 SSH key file on this host before running the scripts from here
 * I.e. export EC2_SSH_KEY_LOCATION=/home/sles/k3s-edge-sandbox/state/site-1/site-1.id_rsa
 
@@ -26,9 +26,9 @@ ExecStart=/bin/bash /usr/local/bin/${SERVICE_NAME}-tunnel.sh
 WantedBy=multi-user.target" > /tmp/${SERVICE_NAME}-tunnel.service
 EOF
 
-ssh ${SSH_USER}@${BACK_END_IP} mkdir -p ~/.ssh
-scp ${EC2_SSH_KEY_LOCATION} ${SSH_USER}@${BACK_END_IP}:/home/${SSH_USER}/.ssh/${EC2_SSH_KEY_NAME}
-ssh ${SSH_USER}@${BACK_END_IP} chmod 400
+ssh ${SSH_USER}@${BACK_END_IP} mkdir -p .ssh
+scp ${EC2_SSH_KEY_LOCATION} ${SSH_USER}@${BACK_END_IP}:.ssh/${EC2_SSH_KEY_NAME}
+ssh ${SSH_USER}@${BACK_END_IP} chmod 400 .ssh/${EC2_SSH_KEY_NAME}
 ## Need to ssh from the back end server to the EC2 instance to remove the script in the root authorized_hosts as well as accept the EC2 key, again ssh'ing as the root user to the EC2 root user
 
 ssh ${SSH_USER}@${BACK_END_IP} 'bash -s' << EOF
@@ -44,7 +44,6 @@ ssh ${SSH_USER}@${BACK_END_IP} <<EOF
 sudo mv /tmp/${SERVICE_NAME}-tunnel.service /etc/systemd/system/
 sudo mv /tmp/${SERVICE_NAME}-tunnel.sh /usr/local/bin/
 sudo systemctl enable --now ${SERVICE_NAME}-tunnel.service
-sudo usermod -aG docker ${SSH_USER}
 EOF
 
 ## To install Rancher server as the application:

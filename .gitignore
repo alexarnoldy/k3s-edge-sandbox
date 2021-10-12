@@ -1,0 +1,9 @@
+KVM/images/*
+EC2/images/*
+bin/destroy*
+state/*
+EC2/.terraform/*
+.terraform/*
+EC2/state/*
+KVM/state/*
+EC2/bin/destroy*

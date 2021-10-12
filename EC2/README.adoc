@@ -1,0 +1,84 @@
+## Overview:
+
+This is a Terraform powered K3s edge sandbox project that deploys discrete K3s clusters in AWS EC2 and registers them to a Rancher server. The goal is to simulate multiple edge environments. 
+
+IMPORTANT: Deploying across multiple regions should work, but has not been tested.
+
+The cluster properties are managed in the k3s_edge_locations.conf file. The only optional field is for tags can get applied to the clusters. This ties into Rancher Continous Delivery (Fleet) to automatically deploy apps to the clusters.
+
+Deploying this project will (hopefully) require little  previous Terraform experience. 
+
+## Architectural notes:
+
+* Every cluster node gets a public IP address
+** The goal is to (eventually) put all nodes behind a NAT router
+** Only ports 22 and 6443 are exposed to the public Internet
+* If needed, the Rancher MCM server can be run as a Docker container 
+* Developed and tested on:
+----
+Terraform v0.13.4
++ provider registry.terraform.io/hashicorp/aws v3.46.0
++ provider registry.terraform.io/rancher/rancher2 v1.15.1
+----
+
+## Instructions for implementing: 
+
+=== Steps to prepare this environment
+
+* Install Terraform on a suitable workstation
+* Deploy a Rancher MCM server anywhere that it can be reached by the K3s clusters on port 443
+** Public cloud providers are common option as they allow easy access from the Internet or private networks with outward HTTPS access
+** Various deployment options can be found at: https://rancher.com/docs/rancher/v2.x/en/quick-start-guide/deployment/
+* Set the AWS API tokens as environmental variables
+** It is recommended that this is done in a secure, semi-automated way
+* Create API access tokens for your account on the Rancher MCM server 
+** https://rancher.com/docs/rancher/v2.x/en/user-settings/api-keys/
+* On the workstation, create a ~/.rancher_tokens file with the format:
+
+----
+export RANCHER_URL=https://xxxx.xxxx.xxxx
+export RANCHER_ACCESS_KEY=token-xxxxx
+export RANCHER_SECRET_KEY=xxxxxxxxxxxxxxxx
+----
+
+* On the workstation, clone this repository and cd into this directory
+* Comment out the lines in the section near the top if a Rancher server is not available
+* Update the terraform.tfvars file with: 
+** The SSH public key for the KVM host user (the authorized_keys list at the bottom of the file)
+* Update the rancher2 provider section in main.tf file with:
+** Uncomment "insecure = true" if using self-signed certificates and not providing them to Terraform
+* Update the k3s_edge_locations.conf file to define the simulated edge locations
+** Cluster labels are used by Rancher server for several things, including Continous Delivery
+* From inside this directory, run `terraform init`
+* Create a simulated edge location with command `./bin/k3s-cluster-create.sh <edge location>`
+** I.e. `./bin/k3s-cluster-create.sh site6`
+* A successful deployment will have instructions on how to connect to the cluster and how to destroy it
+
+=== Random notes on how to allocate and associate an EIP to one of the instances
+
+* Set the tag for the EIP that will be associated with the instance
+----
+TAGNAME=""
+----
+----
+ALLOCATIONID=$(aws ec2 allocate-address --domain vpc --tag-specifications "ResourceType=elastic-ip,Tags=[{Key=Name,Value=${TAGNAME}}]" | awk -F\" '/AllocationId/ {print$4}')
+
+----
+
+* Get the instance ID for the instance:
+----
+aws ec2 describe-instances --filters Name=tag-key,Values=Name --query 'Reservations[*].Instances[*].{Instance:InstanceId,Name:Tags[?Key==`Name`]|[0].Value}' --output table --no-cli-pager
+----
+
+* Associate the EIP with instance:
+----
+INSTANCEID=""
+----
+----
+aws ec2 associate-address --allocation-id ${ALLOCATIONID} --instance-id ${INSTANCEID} --no-cli-pager
+----
+
+* Verify all of the assigned public IP addresses:
+----
+aws ec2 describe-instances --filters Name=tag-key,Values=Name --query 'Reservations[*].Instances[*].{Instance:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,PublicIP:PublicIpAddress}' --output table --no-cli-pager
+----

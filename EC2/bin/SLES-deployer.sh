@@ -1,8 +1,6 @@
 #!/bin/bash  
 
-## Script to run Terraform to create an openSUSE JeOS cluster on the local system 
-## then create a K3s cluster on it, and finally import the cluster 
-## into a Rancher server instance.
+## Script to run Terraform to create an openSUSE JeOS VM in EC2
 
 ## 02/17/2021 - alex.arnoldy@suse.com
 
@@ -135,7 +133,7 @@ FIRST_SERVER_PRIVATE_IP=$(terraform output -json -state=state/${EDGE_LOCATION}/$
 
 CLUSTER_SSH_KEY=state/${EDGE_LOCATION}/id_rsa
 
-mkdir -p ~/.kube/
+#mkdir -p ~/.kube/
 
 
 ## Remove any previous entries for this node in the local known_hosts file
@@ -151,112 +149,112 @@ echo "Waiting for someone who truly gets me..."
 [ ${ALL_SERVERS} -gt 2 ] && CLUSTER="--cluster-init" || CLUSTER=""
 
 ## Verify on the command line which version of K3s is being installed
-echo "K3s_VERSION=$(echo ${K3s_VERSION})"
-
-ssh -q -oStrictHostKeyChecking=no -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
-INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
---kube-apiserver-arg cloud-provider=external \
---kube-apiserver-arg allow-privileged=true \
---kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
---kube-controller-arg cloud-provider=external \
---kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
---disable-cloud-controller' \
-sh -s -
-EOF
+#echo "K3s_VERSION=$(echo ${K3s_VERSION})"
+#
+#ssh -q -oStrictHostKeyChecking=no -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
+#curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+#INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
+#--kube-apiserver-arg cloud-provider=external \
+#--kube-apiserver-arg allow-privileged=true \
+#--kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
+#--kube-controller-arg cloud-provider=external \
+#--kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
+#--disable-cloud-controller' \
+#sh -s -
+#EOF
 
 
 ## Wait until the K3s server node is ready before joining the rest of the nodes
-ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "until kubectl get deployment -n kube-system coredns &> /dev/null; do echo "Waiting for the Kubernetes API server to respond..." && sleep 10; done"
-sleep 5
-
-ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=ready --timeout=600s pod -l k8s-app=kube-dns"
+#ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "until kubectl get deployment -n kube-system coredns &> /dev/null; do echo "Waiting for the Kubernetes API server to respond..." && sleep 10; done"
+#sleep 5
+#
+#ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl -n kube-system wait --for=condition=ready --timeout=600s pod -l k8s-app=kube-dns"
 
 
 ## Create and move into place the HelmChart object for AWS EBS CSI driver resource
-cat <<EOF> /tmp/aws-ebs-csi-driver.yaml
-apiVersion: helm.cattle.io/v1
-kind: HelmChart
-metadata:
-  name: aws-ebs-csi-driver
-  namespace: kube-system
-spec:
-  chart: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases/download/helm-chart-aws-ebs-csi-driver-2.0.0/aws-ebs-csi-driver-2.0.0.tgz
-  version: v2.0.0
-  targetNamespace: kube-system
-  valuesContent: |-
-    enableVolumeScheduling: true
-    enableVolumeResizing: true
-    enableVolumeSnapshot: true
-    extraVolumeTags:
-      Name: k3s-ebs
-      anothertag: anothervalue
-EOF
+#cat <<EOF> /tmp/aws-ebs-csi-driver.yaml
+#apiVersion: helm.cattle.io/v1
+#kind: HelmChart
+#metadata:
+#  name: aws-ebs-csi-driver
+#  namespace: kube-system
+#spec:
+#  chart: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases/download/helm-chart-aws-ebs-csi-driver-2.0.0/aws-ebs-csi-driver-2.0.0.tgz
+#  version: v2.0.0
+#  targetNamespace: kube-system
+#  valuesContent: |-
+#    enableVolumeScheduling: true
+#    enableVolumeResizing: true
+#    enableVolumeSnapshot: true
+#    extraVolumeTags:
+#      Name: k3s-ebs
+#      anothertag: anothervalue
+#EOF
 
-cat <<EOF> /tmp/aws-ebs-sc.yaml
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: ebs-storageclass
-  annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
-provisioner: ebs.csi.aws.com
-volumeBindingMode: WaitForFirstConsumer
-EOF
-
-scp -q -i ${CLUSTER_SSH_KEY} /tmp/aws-ebs-csi-driver.yaml /tmp/aws-ebs-sc.yaml ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}:/tmp/
-
-ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cp /tmp/aws-ebs*yaml /var/lib/rancher/k3s/server/manifests
+#cat <<EOF> /tmp/aws-ebs-sc.yaml
+#kind: StorageClass
+#apiVersion: storage.k8s.io/v1
+#metadata:
+#  name: ebs-storageclass
+#  annotations:
+#    storageclass.kubernetes.io/is-default-class: "true"
+#provisioner: ebs.csi.aws.com
+#volumeBindingMode: WaitForFirstConsumer
+#EOF
+#
+#scp -q -i ${CLUSTER_SSH_KEY} /tmp/aws-ebs-csi-driver.yaml /tmp/aws-ebs-sc.yaml ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP}:/tmp/
+#
+#ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cp /tmp/aws-ebs*yaml /var/lib/rancher/k3s/server/manifests
 
 
 ## Join the remaining two server nodes, if applicable, to the cluster
-	NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+#	NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
 
-for SERVER in $(echo ${ALL_SERVER_PUBLIC_IPS[@]}); do
-	ssh -q -i ${CLUSTER_SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' << EOF
-FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
-NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
-K3s_VERSION=${K3s_VERSION};
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
-K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
-K3S_TOKEN=${NODE_TOKEN} \
-INSTALL_K3S_EXEC='server --write-kubeconfig-mode=644 \
---kube-apiserver-arg cloud-provider=external \
---kube-apiserver-arg allow-privileged=true \
---kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
---kube-controller-arg cloud-provider=external \
---kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
---disable-cloud-controller' \
-sh -s -
-EOF
-done
-
-
+#for SERVER in $(echo ${ALL_SERVER_PUBLIC_IPS[@]}); do
+#	ssh -q -i ${CLUSTER_SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${SERVER} 'bash -s' << EOF
+#FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP};
+#NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+#K3s_VERSION=${K3s_VERSION};
+#curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+#K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
+#K3S_TOKEN=${NODE_TOKEN} \
+#INSTALL_K3S_EXEC='server --write-kubeconfig-mode=644 \
+#--kube-apiserver-arg cloud-provider=external \
+#--kube-apiserver-arg allow-privileged=true \
+#--kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
+#--kube-controller-arg cloud-provider=external \
+#--kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
+#--disable-cloud-controller' \
+#sh -s -
+#EOF
+#done
 
 
-for AGENT in $(echo ${ALL_AGENT_PUBLIC_IPS[@]}); do
-	ssh -q -i ${CLUSTER_SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' << EOF
-FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP}
-NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
-#K3s_VERSION=${INSTALLED_K3s_VERSION}
-K3s_VERSION=${K3s_VERSION}
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
-K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
-K3S_TOKEN=${NODE_TOKEN} \
-K3S_KUBECONFIG_MODE="644" sh -
-EOF
-	sleep 5
-done
+
+
+#for AGENT in $(echo ${ALL_AGENT_PUBLIC_IPS[@]}); do
+#	ssh -q -i ${CLUSTER_SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${AGENT} 'bash -s' << EOF
+#FIRST_SERVER_PRIVATE_IP=${FIRST_SERVER_PRIVATE_IP}
+#NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} sudo cat /var/lib/rancher/k3s/server/node-token)
+##K3s_VERSION=${INSTALLED_K3s_VERSION}
+#K3s_VERSION=${K3s_VERSION}
+#curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+#K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
+#K3S_TOKEN=${NODE_TOKEN} \
+#K3S_KUBECONFIG_MODE="644" sh -
+#EOF
+#	sleep 5
+#done
 
 ## Remove the default flag from the local-path StorageClass
-ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' <<EOF
-kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
-EOF
-
-CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//' | awk '{print$4}')
+#ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' <<EOF
+#kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+#EOF
+#
+#CATTLE_AGENT_STRING=$(grep -w command ${PWD}/state/${EDGE_LOCATION}/${EDGE_LOCATION}.tfstate | head -1 | awk -F\"command\"\: '{print$2}' | sed -e 's/",//' -e 's/"//' | awk '{print$4}')
 
 ## Apply securely, or attempt insecurely if it fails (for any reason)
-ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }"
+#ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} "kubectl apply -f ${CATTLE_AGENT_STRING} || { curl --insecure -sfL ${CATTLE_AGENT_STRING} | kubectl apply -f -; }"
 
 
 ##Final messages for using and destroying the cluster

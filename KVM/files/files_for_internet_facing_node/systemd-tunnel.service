@@ -1,0 +1,10 @@
+cat <<EOF> /tmp/${SERVICE_NAME}-tunnel.service
+[Unit]
+Description=Maintain an SSH tunnel for ${SERVICE_NAME} access to lab
+[Service]
+Restart=always
+ExecStart=/bin/bash /usr/local/bin/${SERVICE_NAME}-tunnel.sh
+[Install]
+WantedBy=multi-user.target
+EOF
+

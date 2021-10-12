@@ -4,14 +4,51 @@ terraform {
   required_providers {
     rancher2 = {
       source = "rancher/rancher2"
+      alias = "rancher-demo"
       #      version = "1.14.0"
+    }
+    aws = {
+#      region = "us-west-2"
     }
   }
 }
 
 
-provider "aws" {
-  region = "us-west-1"
+
+#### Comment out the section below if a Rancher server is not available ####
+provider "rancher2" {
+  alias = "rancher-demo"
+####
+# Uncomment the "insecure = true" line if using self-signed certs and not providing them to Terraform
+####
+#  insecure = true
+}
+
+resource "rancher2_cluster" "k3s-cluster-instance" {
+  provider    = rancher2.rancher-demo
+  name        = "k3s-${var.edge_location}"
+  description = "K3s imported cluster"
+  labels      = var.cluster_labels
+  #  labels = tomap({"location" = "north", "customer" = "BigMoney"})
+}
+
+data "rancher2_cluster" "k3s-cluster" {
+  provider   = rancher2.rancher-demo
+  name       = "k3s-${var.edge_location}"
+  depends_on = [rancher2_cluster.k3s-cluster-instance]
+}
+#### Comment out the section above if a Rancher server is not available ####
+
+
+data "aws_ami" "sles15sp2" {
+  owners = ["amazon"]
+  most_recent      = true
+
+  filter {
+    name   = "name"
+    values = ["suse-sles-15-sp3-v20210622-hvm-ssd-x86_64"]
+#    values = ["suse-sles-15-sp2*hvm-ssd-x86_64"]
+  }
 }
 
 module "vpc" {
@@ -27,48 +64,57 @@ module "vpc" {
 
   enable_nat_gateway = var.vpc_enable_nat_gateway
 
-  tags = var.vpc_tags
+  tags = {
+    KubernetesCluster   = var.edge_location
+  }
 }
+
+
+resource "aws_key_pair" "ssh-key-pair" {
+  key_name   = "${var.edge_location}-key-pair"
+  public_key = var.ssh_public_key
+}
+
 
 module "ec2_first_server_instance" {
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "2.12.0"
 
-  name           = "${var.edge_location}-server"
-  ami            = var.instance_ami
+  name           = "${var.edge_location}-first-server"
+#  ami            = var.instance_ami
+  ami            = data.aws_ami.sles15sp2.id
   instance_type  = var.server_instance_type
-  key_name       = var.ssh_public_key
+#  key_name       = var.ssh_public_key
+  key_name       = aws_key_pair.ssh-key-pair.key_name
+  iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
 #  user_data = data.template_file.user_data.rendered
 
   tags = {
+    KubernetesCluster   = var.edge_location
     Terraform   = "true"
     first_server   = "true"
   }
 }
-
-#data "template_file" "user_data" {
-#    template = file("./k3s.sh")
-#    vars = {
-#      first_ip = module.ec2_first_server_instance.private_ip
-#    }
-#}
 
 module "ec2_server_instances" {
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "2.12.0"
 
   name           = "${var.edge_location}-server"
-#  instance_count = var.num_servers 
   instance_count = (var.num_servers - 1)
-  ami            = var.instance_ami
+#  ami            = var.instance_ami
+  ami            = data.aws_ami.sles15sp2.id
   instance_type  = var.server_instance_type
-  key_name       = var.ssh_public_key
+#  key_name       = var.ssh_public_key
+  key_name       = aws_key_pair.ssh-key-pair.key_name
+  iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
 
   tags = {
+    KubernetesCluster   = var.edge_location
     Terraform   = "true"
     Environment = "dev"
   }
@@ -81,13 +127,17 @@ module "ec2_agent_instances" {
 
   name           = "${var.edge_location}-agent"
   instance_count = var.num_agents
-  ami            = var.instance_ami
+#  ami            = var.instance_ami
   instance_type  = var.agent_instance_type
-  key_name       = var.ssh_public_key
+  ami            = data.aws_ami.sles15sp2.id
+#  key_name       = var.ssh_public_key
+  key_name       = aws_key_pair.ssh-key-pair.key_name
+  iam_instance_profile = aws_iam_instance_profile.k3s_ebs_profile.name
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
 
   tags = {
+    KubernetesCluster   = var.edge_location
     Terraform   = "true"
     Environment = "dev"
   }
@@ -148,28 +198,187 @@ resource "aws_security_group" "K3s_outside_sg" {
 
 }
 
-#module "rancher_cluster" {
-#  source = "./modules/rancher2"
-#}
+resource "aws_iam_role" "k3s_ebs_role" {
+  name = "${var.edge_location}-k3s_ebs_role"
 
-provider "rancher2" {
-  alias = "rancher-demo"
-  #  api_url    = "https://rancher-demo.susealliances.com/v3"
+  assume_role_policy = jsonencode({
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+})
+
+  tags = {
+    KubernetesCluster   = var.edge_location
+    Terraform   = "true"
+  }
 }
 
-resource "rancher2_cluster" "k3s-cluster-instance" {
-  provider    = rancher2.rancher-demo
-  name        = "k3s-${var.edge_location}"
-  description = "K3s imported cluster"
-  labels      = var.cluster_labels
-  #  labels = tomap({"location" = "north", "customer" = "BigMoney"})
+
+## NOTE: To delete an orphaned instance profile: aws iam delete-instance-profile --instance-profile-name <name>
+resource "aws_iam_instance_profile" "k3s_ebs_profile" {
+  name = "${var.edge_location}-k3s_ebs_profile"
+  role = aws_iam_role.k3s_ebs_role.name
 }
 
-data "rancher2_cluster" "k3s-cluster" {
-  provider   = rancher2.rancher-demo
-  name       = "k3s-${var.edge_location}"
-  depends_on = [rancher2_cluster.k3s-cluster-instance]
+resource "aws_iam_role_policy" "k3s_ebs_role_policy" {
+  name = "${var.edge_location}-k3s_ebs_role_policy"
+  role = aws_iam_role.k3s_ebs_role.id
+
+  policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateSnapshot",
+                "ec2:AttachVolume",
+                "ec2:DetachVolume",
+                "ec2:ModifyVolume",
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DescribeInstances",
+                "ec2:DescribeSnapshots",
+                "ec2:DescribeTags",
+                "ec2:DescribeVolumes",
+                "ec2:DescribeVolumesModifications"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateTags"
+            ],
+            "Resource": [
+                "arn:aws:ec2:*:*:volume/*",
+                "arn:aws:ec2:*:*:snapshot/*"
+            ],
+            "Condition": {
+                "StringEquals": {
+                    "ec2:CreateAction": [
+                        "CreateVolume",
+                        "CreateSnapshot"
+                    ]
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DeleteTags"
+            ],
+            "Resource": [
+                "arn:aws:ec2:*:*:volume/*",
+                "arn:aws:ec2:*:*:snapshot/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateVolume"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "aws:RequestTag/ebs.csi.aws.com/cluster": "true"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateVolume"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "aws:RequestTag/CSIVolumeName": "*"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateVolume"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "aws:RequestTag/kubernetes.io/cluster/*": "owned"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DeleteVolume"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DeleteVolume"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/CSIVolumeName": "*"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DeleteVolume"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/kubernetes.io/cluster/*": "owned"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DeleteSnapshot"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/CSIVolumeSnapshotName": "*"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DeleteSnapshot"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+                }
+            }
+        }
+    ]
+})
 }
+
 
 #module "website_s3_bucket" {
 #  source = "./modules/aws-s3-static-website-bucket"

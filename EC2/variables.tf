@@ -1,6 +1,10 @@
 # Input variable definitions
 
-#variable first_ip {}
+
+variable "ssh_public_key" {
+  description = "Key to connect to the instance"
+  type        = string
+}
 
 variable "vpc_name" {
   description = "Name of VPC"
@@ -105,9 +109,9 @@ variable "num_agents" {
 }
 
 variable "instance_ami" {
-  description = "AMI for the instance"
+  description = "AMI for the instance, i.e. ami-05c558c169cfe8d99 for us-west-1, ami-0174313b5af8423d7 for us-west-2"
   type        = string
-  default     = "ami-05c558c169cfe8d99"
+  default     = "ami-0174313b5af8423d7"
 }
 
 variable "server_instance_type" {
@@ -125,12 +129,6 @@ variable "agent_instance_type" {
 #variable "ssh_authorized_keys" {
 #  type    = string
 #}
-
-variable "ssh_public_key" {
-  description = "Key to connect to the instance"
-  type        = string
-  default     = "ec2_key_pair"
-}
 
 variable "cluster_labels" {
   type        = map(any)

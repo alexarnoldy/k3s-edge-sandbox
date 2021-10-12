@@ -77,3 +77,8 @@ INSTANCEID=""
 ----
 aws ec2 associate-address --allocation-id ${ALLOCATIONID} --instance-id ${INSTANCEID} --no-cli-pager
 ----
+
+* Verify all of the assigned public IP addresses:
+----
+aws ec2 describe-instances --filters Name=tag-key,Values=Name --query 'Reservations[*].Instances[*].{Instance:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,PublicIP:PublicIpAddress}' --output table --no-cli-pager
+----

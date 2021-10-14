@@ -1,4 +1,4 @@
-cat <<EOF> /tmp/${SERVICE_NAME}-tunnel.service
+cat <<EOF> ${SERVICE_NAME}-tunnel.service
 [Unit]
 Description=Maintain an SSH tunnel for ${SERVICE_NAME} access to lab
 [Service]

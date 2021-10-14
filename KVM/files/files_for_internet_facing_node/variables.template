@@ -1,6 +1,10 @@
 ## This is the Internet facing URL, i.e. edge-demo.susealliances.com
 export FRONT_URL="" 
 
+## These are front-end / back-end port combinations for the EC2 front-end ssh tunnel server and application server
+## The syntax is front-end-port:back-end-port
+## Create as many combinations as you need
+export TUNNEL_PORT_COMBINATIONS=(42422:22 80:80 443:443)
 ## This will be the name of the service running on the back-end ssh tunnel server
 export SERVICE_NAME="" 
 
@@ -10,8 +14,8 @@ export BACK_END_IP=""
 ## This key will bed used by the back-end ssh tunnel server to create the ssh tunnel to the front-end ec2 instance
 export EC2_SSH_KEY_NAME=""
 
-## The location of the EC2 instance's ssh key on this host (ideally in this directory)
-export EC2_SSH_KEY_LOCATION=""
+## The location of the EC2 instance's ssh key on this host (ideally in this directory "./")
+export EC2_SSH_KEY_LOCATION="./"
 
 ## This key will be used to ssh from this host to the back-end ssh tunnel server
 export BACKEND_SSH_KEY_NAME=""

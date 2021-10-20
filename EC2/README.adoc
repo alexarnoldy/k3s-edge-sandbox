@@ -63,6 +63,7 @@ TAGNAME=""
 ----
 ALLOCATIONID=$(aws ec2 allocate-address --domain vpc --tag-specifications "ResourceType=elastic-ip,Tags=[{Key=Name,Value=${TAGNAME}}]" | awk -F\" '/AllocationId/ {print$4}')
 
+echo ${ALLOCATIONID}
 ----
 
 * Get the instance ID for the instance:
@@ -81,4 +82,47 @@ aws ec2 associate-address --allocation-id ${ALLOCATIONID} --instance-id ${INSTAN
 * Verify all of the assigned public IP addresses:
 ----
 aws ec2 describe-instances --filters Name=tag-key,Values=Name --query 'Reservations[*].Instances[*].{Instance:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,PublicIP:PublicIpAddress}' --output table --no-cli-pager
+----
+
+.Add a Route53 record to an existing hosted zone:
+
+* List existing hosted zones:
+----
+aws route53 list-hosted-zones  --output table --no-cli-pager
+----
+
+* Set these variables to create the JSON file to add a record:
+----
+FQDN=""
+IP_ADDRESS=""
+HOSTED_ZONE=""
+----
+
+* Create the JSON file:
+----
+cat <<EOF> add-record.json
+{
+            "Comment": "CREATE/DELETE/UPDATE a record ",
+            "Changes": [{
+            "Action": "CREATE",
+                        "ResourceRecordSet": {
+                                    "Name": "${FQDN}",
+                                    "Type": "A",
+                                    "TTL": 300,
+                                 "ResourceRecords": [{ "Value": "${IP_ADDRESS}"}]
+}}]
+}
+EOF
+----
+
+* Apply the file:
+----
+CHANGE_ID=$(aws route53 change-resource-record-sets --hosted-zone-id ${HOSTED_ZONE} --change-batch file://add-record.json --no-cli-pager | awk '/Id/ {print$2}' | awk -F, '{print$1}')
+----
+
+* After a minute or two, verify the change has completed:
+----
+aws route53  get-change --no-cli-pager --id ${CHANGE_ID}
+
+getent hosts ${FQDN}
 ----

@@ -90,7 +90,7 @@ module "ec2_first_server_instance" {
   vpc_security_group_ids = [aws_security_group.K3s_outside_sg.id, aws_security_group.K3s_local_sg.id]
   subnet_id              = module.vpc.public_subnets[0]
 #  user_data = data.template_file.user_data.rendered
-
+  disable_api_termination = true
   tags = {
     KubernetesCluster   = var.edge_location
     Terraform   = "true"

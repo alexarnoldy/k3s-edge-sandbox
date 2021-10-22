@@ -54,6 +54,18 @@ variable "vpc_tags" {
 variable "ingress_outside_rules" {
   default = [
     {
+      from_port = 80
+      to_port   = 80
+      proto     = "tcp"
+      cidrs     = ["0.0.0.0/0"]
+    },
+    {
+      from_port = 443
+      to_port   = 443
+      proto     = "tcp"
+      cidrs     = ["0.0.0.0/0"]
+    },
+    {
       from_port = 22
       to_port   = 22
       proto     = "tcp"

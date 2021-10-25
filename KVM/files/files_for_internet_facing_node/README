@@ -29,13 +29,34 @@ EOF
 ssh ${SSH_USER}@${BACK_END_IP} mkdir -p .ssh
 scp ${EC2_SSH_KEY_LOCATION} ${SSH_USER}@${BACK_END_IP}:.ssh/${EC2_SSH_KEY_NAME}
 ssh ${SSH_USER}@${BACK_END_IP} chmod 400 .ssh/${EC2_SSH_KEY_NAME}
-## Need to ssh from the back end server to the EC2 instance to remove the script in the root authorized_hosts as well as accept the EC2 key, again ssh'ing as the root user to the EC2 root user
 
+##########################################################################
+##########################################################################
+## Need to ssh from the back end server to the EC2 instance to remove the script in the root authorized_hosts as well as accept the EC2 key, again ssh'ing as the root user to the EC2 root user
+##I.e.:
+
+# From this host to the back-end ssh tunnel server
+ssh ${SSH_USER}@${BACK_END_IP} 
+export FRONT_URL=
+export EC2_SSH_KEY_NAME=
+# From the back-end server to the front-end server
+ssh -p 2244 -i .ssh/${EC2_SSH_KEY_NAME} ec2-user@${FRONT_URL}
+sudo -i
+vim ~/.ssh/authorized_keys
+exit; exit
+# Again from the back-end server to the front-end server, this time as root (to accept the ssh identity key)
+sudo ssh -p 2244 -i .ssh/${EC2_SSH_KEY_NAME} root@${FRONT_URL}
+exit; exit
+# Now back on this host
+##########################################################################
+##########################################################################
+
+##
 ssh ${SSH_USER}@${BACK_END_IP} 'bash -s' << EOF
 echo "#!/bin/bash
 ## Need to set ${SERVICE_NAME} ${APP_SERVER_IP} ${EC2_SSH_KEY_NAME} ${FRONT_END_IP} before running
 while :
-do nohup ssh -p 2244 -R 0.0.0.0:42422:${APP_SERVER_IP}:22 -R 0.0.0.0:80:${APP_SERVER_IP}:80 -R 0.0.0.0:443:${APP_SERVER_IP}:443 -N -i /home/${SSH_USER}/.ssh/${EC2_SSH_KEY_NAME} ec2-user@${FRONT_END_IP}
+do nohup ssh -p 2244 -R 0.0.0.0:42422:${APP_SERVER_IP}:22 -R 0.0.0.0:80:${APP_SERVER_IP}:80 -R 0.0.0.0:443:${APP_SERVER_IP}:443 -N -i /home/${SSH_USER}/.ssh/${EC2_SSH_KEY_NAME} root@${FRONT_END_IP}
 sleep 10
 done" > /tmp/${SERVICE_NAME}-tunnel.sh
 EOF
@@ -46,14 +67,33 @@ sudo mv /tmp/${SERVICE_NAME}-tunnel.sh /usr/local/bin/
 sudo systemctl enable --now ${SERVICE_NAME}-tunnel.service
 EOF
 
-## To install Rancher server as the application:
+## To install docker on the app server: 
 ssh ${SSH_USER}@${APP_SERVER_IP} << EOF
 sudo zypper -n in docker
 sudo systemctl enable --now docker.service
 sudo usermod -aG docker ${SSH_USER}
 EOF
+
 ssh ${SSH_USER}@${APP_SERVER_IP} docker ps -a
 
+## Validate port 80 is passing through from the front-end server
+ssh ${SSH_USER}@${APP_SERVER_IP} << EOF
+docker run -it --rm -d -p 80:80 --name nginx nginx
+EOF
+
+## Test from the Internet with a browser or curl:
+curl http://${APP_SERVER_IP}
+
+curl http://${FRONT_URL}
+
+## When ready, remove nginx:
+ssh ${SSH_USER}@${APP_SERVER_IP} << EOF
+docker stop nginx
+docker ps -a
+EOF
+
+
+## To install Rancher server as the application:
 ssh ${SSH_USER}@${APP_SERVER_IP} << EOF
 docker run \
 	--detach \

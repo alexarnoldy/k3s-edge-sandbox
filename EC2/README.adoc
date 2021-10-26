@@ -102,7 +102,7 @@ HOSTED_ZONE_ID=""
 ----
 cat <<EOF> add-record.json
 {
-            "Comment": "CREATE/DELETE/UPDATE a record ",
+            "Comment": "CREATE/DELETE/UPSERT a record ",
             "Changes": [{
             "Action": "CREATE",
                         "ResourceRecordSet": {
@@ -129,6 +129,6 @@ getent hosts ${FQDN}
 
 * If needed, review the Elastic IPs allocated:
 ----
-aws ec2 describe-addresses --no-cli-pager --query 'Addresses[*].{Public_IP:PublicIp,Allocation_ID:AllocationId}' --output table
+aws ec2 describe-addresses --no-cli-pager --query 'Addresses[*].{Public_IP:PublicIp,AssociationId:AssociationId}' --output table
 ----
 

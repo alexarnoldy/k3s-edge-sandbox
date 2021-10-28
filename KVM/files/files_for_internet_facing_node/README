@@ -1,7 +1,7 @@
 * Create a VM in EC2 with an EIP and a FQDN in Route 53
 * Set ssh port to 2244 and `GatewayPorts clientspecified` in /etc/ssh/sshd_config 
 ** Restart sshd.service
-* Need to populate the EC2 SSH key file on this host before running the scripts from here
+* Need to populate the EC2 SSH private key file on this host before running the scripts from here
 * I.e. export EC2_SSH_KEY_LOCATION=/home/sles/k3s-edge-sandbox/state/site-1/site-1.id_rsa
 
 * Set these variables, then use ssh to run the scripts on each node.
@@ -94,15 +94,45 @@ EOF
 
 
 ## To install Rancher server as the application:
+# Use one of the following to set the Rancher version:
+RANCHER_VERSION="latest"
+RANCHER_VERSION="stable"
+RANCHER_VERSION="v2.6.1"
+
+################
+#### Set the following to use public TLS certificates (skip for self-signed or Let's Encrypt certs):
+PUB_CERT_DIR="/home/opensuse/certs/susealliances.com"
+PUB_CERT_FQPN="${PUB_CERT_DIR}/fullchain.pem"
+PUB_CERT="-v ${PUB_CERT_FQPN}:/etc/rancher/ssl/cert.pem"
+PUB_KEY_FQPN="${PUB_CERT_DIR}/privkey.pem"
+PUB_KEY="-v ${PUB_KEY_FQPN}:/etc/rancher/ssl/key.pem"
+CERTS_SWITCH="--no-cacerts"
+# Need to scp a tarball of the public directory (remember to use -tvfh to follow links) to the App server:
+LOCAL_CERT_TARBALL="/home/sles/certs/susealliances.com.tls.tar"
+scp ${LOCAL_CERT_TARBALL} ${SSH_USER}@${APP_SERVER_IP}:$(dirname ${PUB_CERT_DIR})
+ssh ${SSH_USER}@${APP_SERVER_IP} << EOF
+tar xvf $(basename ${LOCAL_CERT_TARBALL}) -C $(dirname ${PUB_CERT_DIR})
+EOF
+################
+
+################
+#### Set the following to use Let's Encrypt TLS certificates (skip for self-signed or public certs):
+CERTS_SWITCH="--acme-domain ${FRONT_URL}"
+################
+
+
+## Run the following to perform the Rancher server installation
 ssh ${SSH_USER}@${APP_SERVER_IP} << EOF
 docker run \
 	--detach \
 	--restart=unless-stopped \
 	--publish 80:80 --publish 443:443 \
 	--privileged \
+        ${PUB_CERT} \
+        ${PUB_KEY} \
   --name rancher \
   -e CATTLE_BOOTSTRAP_PASSWORD=${RANCHER_BOOTSTRAP_PW} \
-  rancher/rancher --acme-domain ${FRONT_URL}
+  rancher/rancher:${RANCHER_VERSION} ${CERTS_SWITCH} 
 EOF
 
 

@@ -1,0 +1,57 @@
+
+FQDN="rancher-demo.susealliances.com"
+TAGNAME="rancher-demo"
+
+ALLOCATIONID=$(aws ec2 allocate-address --domain vpc --tag-specifications "ResourceType=elastic-ip,Tags=[{Key=Name,Value=${TAGNAME}}]" | awk -F\" '/AllocationId/ {print$4}')
+
+echo ${ALLOCATIONID}
+
+#aws ec2 describe-instances --filters Name=tag-key,Values=Name --query 'Reservations[*].Instances[*].{Instance:InstanceId,Name:Tags[?Key==`Name`]|[0].Value}' --output table --no-cli-pager
+
+INSTANCEID=$(aws ec2 describe-instances --filters Name=tag-key,Values=Name --query 'Reservations[*].Instances[*].{Instance:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,PublicIpAddress:PublicIpAddress}' --output table --no-cli-pager | grep ${TAGNAME} | tail -1 | awk -F\| '{print$2}')
+
+echo ${INSTANCEID}
+
+
+aws ec2 associate-address --allocation-id ${ALLOCATIONID} --instance-id ${INSTANCEID} --no-cli-pager
+
+IP_ADDRESS=$(aws ec2 describe-instances --filters Name=tag-key,Values=Name --query 'Reservations[*].Instances[*].{Instance:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,PublicIpAddress:PublicIpAddress}' --output table --no-cli-pager | grep ${TAGNAME} | tail -1 | awk -F\| '{print$4}')
+
+echo ${IP_ADDRESS}
+
+#aws ec2 describe-instances --filters Name=tag-key,Values=Name --query 'Reservations[*].Instances[*].{Instance:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,PublicIP:PublicIpAddress}' --output table --no-cli-pager
+
+#aws route53 list-hosted-zones  --output table --no-cli-pager
+
+HOSTED_ZONE_ID=$(aws route53 list-hosted-zones  --output table --no-cli-pager | awk  '/hostedzone/ {print$4}')
+
+
+cat <<EOF> /tmp/add-record.json
+{
+            "Comment": "CREATE/DELETE/UPSERT a record ",
+            "Changes": [{
+            "Action": "CREATE",
+                        "ResourceRecordSet": {
+                                    "Name": "${FQDN}",
+                                    "Type": "A",
+                                    "TTL": 300,
+                                 "ResourceRecords": [{ "Value": "${IP_ADDRESS}"}]
+}}]
+}
+EOF
+
+cat /tmp/add-record.json
+
+sleep 5
+
+CHANGE_ID=$(aws route53 change-resource-record-sets --hosted-zone-id ${HOSTED_ZONE_ID} --change-batch file:///tmp/add-record.json --no-cli-pager | awk '/Id/ {print$2}' | awk -F, '{print$1}' | awk -F\" '{print$2}')
+
+sleep 15
+
+aws route53  get-change --no-cli-pager --id ${CHANGE_ID}
+
+getent hosts ${FQDN}
+
+aws ec2 describe-addresses --no-cli-pager --query 'Addresses[*].{Public_IP:PublicIp,AssociationId:AssociationId}' --output table
+
+

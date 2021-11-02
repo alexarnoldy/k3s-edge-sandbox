@@ -55,6 +55,8 @@ sudo ssh -p 2244 -i .ssh/${EC2_SSH_KEY_NAME} root@${FRONT_URL} << EOF
 exit
 EOF
 
+exit
+
 # Shell session should now be back on this host
 ##########################################################################
 ##########################################################################
@@ -115,6 +117,7 @@ RANCHER_VERSION="stable"
 RANCHER_VERSION="v2.6.2"
 
 ################
+################
 #### Set the following ONLY to use public TLS certificates (skip for self-signed or Let's Encrypt certs):
 PUB_CERT_DIR="/home/opensuse/certs/susealliances.com"
 PUB_CERT_FQPN="${PUB_CERT_DIR}/fullchain.pem"
@@ -132,10 +135,13 @@ ssh ${SSH_USER}@${APP_SERVER_IP} << EOF
 tar xvf $(dirname ${PUB_CERT_DIR})/$(basename ${LOCAL_CERT_TARBALL}) -C $(dirname ${PUB_CERT_DIR})
 EOF
 ################
+################
 
+################
 ################
 #### Set the following ONLY to use Let's Encrypt TLS certificates (skip for self-signed or public certs):
 CERTS_SWITCH="--acme-domain ${FRONT_URL}"
+################
 ################
 
 

@@ -60,7 +60,11 @@ AWS_SSH_KEY=$(cat state/${EDGE_LOCATION}/id_rsa.pub)
 ## Review the config file before applying the config or bad things might happen
 ## Example: 
 ## 10.0.11.0./24   site-1   3/t2.small   0/t2.small   status=standby
-EDGE_LOCATION_CONFIG=($(grep ${EDGE_LOCATION} ${CONFIG_FILE} | head -1))
+EDGE_LOCATION_CONFIG=($(grep ${EDGE_LOCATION} ${CONFIG_FILE}))
+
+## Ensure only one location was returned:
+[ $(grep ${EDGE_LOCATION} ${CONFIG_FILE} | wc -l) -gt 1 ] && { echo -e "${LCYAN}${EDGE_LOCATION}${NC} matches too many entries in the ${CONFIG_FILE} config file. Exiting."; exit; }
+
 
 #### Changing the format of the config file for AWS changed how the data has to be parsed. Now ALL_SERVERS=NUM_SERVERS and ALL_AGENTS=NUM_AGENTS
 ## Discover up to 3 server nodes to be used in this edge location.

@@ -69,9 +69,16 @@ variable "ingress_outside_rules" {
       from_port = 22
       to_port   = 22
       proto     = "tcp"
-      cidrs     = ["0.0.0.0/0"]
+### Change for your public IP or to "0.0.0.0/0" for wide open
+      cidrs     = ["91.193.113.129/32"]
     },
-
+    {
+      from_port = 2244
+      to_port   = 2244
+      proto     = "tcp"
+### Change for your public IP or to "0.0.0.0/0" for wide open
+      cidrs     = ["91.193.113.129/32"]
+    },
     {
       from_port = 6443
       to_port   = 6443

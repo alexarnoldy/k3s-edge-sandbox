@@ -159,6 +159,11 @@ echo "K3s_VERSION=$(echo ${K3s_VERSION})"
 ssh -q -oStrictHostKeyChecking=no -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 'bash -s' << EOF
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
+--kube-controller-manager-arg node-monitor-period=5s \
+--kube-controller-manager-arg node-monitor-grace-period=10s \
+# --kube-controller-manager-arg pod-eviction-timeout=20s \
+--kubelet-arg node-status-update-frequency=5s \
+--kube-apiserver-arg enable-admission-plugins=NodeRestriction,DefaultTolerationSeconds \
 --kube-apiserver-arg cloud-provider=external \
 --kube-apiserver-arg allow-privileged=true \
 --kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
@@ -224,6 +229,11 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
 K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
 K3S_TOKEN=${NODE_TOKEN} \
 INSTALL_K3S_EXEC='server --write-kubeconfig-mode=644 \
+--kube-controller-manager-arg node-monitor-period=5s \
+--kube-controller-manager-arg node-monitor-grace-period=10s \
+# --kube-controller-manager-arg pod-eviction-timeout=20s \
+--kubelet-arg node-status-update-frequency=5s \
+--kube-apiserver-arg enable-admission-plugins=NodeRestriction,DefaultTolerationSeconds \
 --kube-apiserver-arg cloud-provider=external \
 --kube-apiserver-arg allow-privileged=true \
 --kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
@@ -244,6 +254,7 @@ NODE_TOKEN=$(ssh -q -i ${CLUSTER_SSH_KEY} ${SSH_USER}@${FIRST_SERVER_PUBLIC_IP} 
 #K3s_VERSION=${INSTALLED_K3s_VERSION}
 K3s_VERSION=${K3s_VERSION}
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3s_VERSION} \
+INSTALL_K3S_EXEC='agent --kubelet-arg node-status-update-frequency=5s' \
 K3S_URL=https://${FIRST_SERVER_PRIVATE_IP}:6443 \
 K3S_TOKEN=${NODE_TOKEN} \
 K3S_KUBECONFIG_MODE="644" sh -

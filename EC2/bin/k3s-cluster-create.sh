@@ -166,9 +166,10 @@ INSTALL_K3S_EXEC='server ${CLUSTER} --write-kubeconfig-mode=644 \
 --kube-apiserver-arg enable-admission-plugins=NodeRestriction,DefaultTolerationSeconds \
 --kube-apiserver-arg cloud-provider=external \
 --kube-apiserver-arg allow-privileged=true \
---kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
 --kube-controller-arg cloud-provider=external \
---kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
+## Feature gates seem to have changed in newer versions
+# --kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
+# --kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
 --disable-cloud-controller' \
 sh -s -
 EOF
@@ -236,9 +237,10 @@ INSTALL_K3S_EXEC='server --write-kubeconfig-mode=644 \
 --kube-apiserver-arg enable-admission-plugins=NodeRestriction,DefaultTolerationSeconds \
 --kube-apiserver-arg cloud-provider=external \
 --kube-apiserver-arg allow-privileged=true \
---kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
 --kube-controller-arg cloud-provider=external \
---kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
+## Feature gates seem to have changed in newer versions
+# --kube-apiserver-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true,VolumeSnapshotDataSource=true \
+# --kubelet-arg feature-gates=CSINodeInfo=true,CSIDriverRegistry=true,CSIBlockVolume=true \
 --disable-cloud-controller' \
 sh -s -
 EOF
